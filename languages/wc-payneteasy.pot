@@ -1,0 +1,595 @@
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: Payment system PAYNET\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2024-07-30 21:35+0300\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+"X-Generator: Poedit 3.4.4\n"
+"X-Loco-Version: 2.6.4; wp-6.2.2\n"
+"X-Domain: wc-payneteasy\n"
+
+#: form_fields.php:100 form_fields.php:171 hooks.php:149
+msgid "Advance"
+msgstr ""
+
+#: form_fields.php:196 hooks.php:170
+msgid "Agency fee"
+msgstr ""
+
+#. Description of the plugin
+msgid "Allows you to use Payment system PAYNET with the WooCommerce plugin."
+msgstr ""
+
+#: form_fields.php:119 hooks.php:107
+msgid "Applies to items that can be sold by piece or unit"
+msgstr ""
+
+#: form_fields.php:142 hooks.php:130
+msgid "Applies when using other units of measurement"
+msgstr ""
+
+#: form_fields.php:164 hooks.php:71
+msgid "Calculation method"
+msgstr ""
+
+#: form_fields.php:93
+msgid "Calculation method for delivery"
+msgstr ""
+
+#: form_fields.php:95
+msgid "Calculation method for the delivery service."
+msgstr ""
+
+#: form_fields.php:212 hooks.php:186
+msgid "Cash issuance by bank payment agent"
+msgstr ""
+
+#: form_fields.php:211 hooks.php:185
+msgid "Casino payment"
+msgstr ""
+
+#: form_fields.php:123 hooks.php:111
+msgid "Centimeter"
+msgstr ""
+
+#: form_fields.php:24
+msgid "Client ID"
+msgstr ""
+
+#: form_fields.php:32
+msgid "Client Secret"
+msgstr ""
+
+#: form_fields.php:104 form_fields.php:175 hooks.php:153
+msgid "Credit payment"
+msgstr ""
+
+#: form_fields.php:103 form_fields.php:174 hooks.php:152
+msgid "Credit transfer"
+msgstr ""
+
+#: form_fields.php:131 hooks.php:119
+msgid "Cubic meter"
+msgstr ""
+
+#: form_fields.php:17
+msgid "Customer Message"
+msgstr ""
+
+#: form_fields.php:134 hooks.php:122
+msgid "Day"
+msgstr ""
+
+#: form_fields.php:124 hooks.php:112
+msgid "Decimeter"
+msgstr ""
+
+#: form_fields.php:166
+msgid ""
+"Default payment method (for goods and services that do not have a payment "
+"method specified)."
+msgstr ""
+
+#: form_fields.php:110
+msgid "Default settings for products and services"
+msgstr ""
+
+#: form_fields.php:150
+msgid ""
+"Default tax rate (for goods and services that do not have a specified tax rate)."
+msgstr ""
+
+#: form_fields.php:116
+msgid ""
+"Default units of measure (for goods and services that do not have a specified "
+"unit of measure)."
+msgstr ""
+
+#: form_fields.php:204 hooks.php:178
+msgid "Deposit"
+msgstr ""
+
+#: form_fields.php:86
+msgid "Email"
+msgstr ""
+
+#: form_fields.php:88
+msgid "Email for sending a fiscal receipt if the user's email is not specified."
+msgstr ""
+
+#: form_fields.php:56
+msgid "Enable logging"
+msgstr ""
+
+#: form_fields.php:6
+msgid "Enable Payment system PAYNET"
+msgstr ""
+
+#: form_fields.php:70
+msgid "Enable send zip code"
+msgstr ""
+
+#: form_fields.php:49
+msgid "Enable test mode"
+msgstr ""
+
+#: form_fields.php:63
+msgid "Enable two-stage payment"
+msgstr ""
+
+#: form_fields.php:96
+msgid "Enter calculation method for delivery."
+msgstr ""
+
+#: form_fields.php:167
+msgid "Enter calculation method."
+msgstr ""
+
+#: form_fields.php:27
+msgid "Enter Client ID"
+msgstr ""
+
+#: form_fields.php:35
+msgid "Enter Client Secret"
+msgstr ""
+
+#: form_fields.php:89
+msgid "Enter email."
+msgstr ""
+
+#: form_fields.php:43
+msgid "Enter Merchant-Authorization"
+msgstr ""
+
+#: form_fields.php:184
+msgid "Enter subject of calculation."
+msgstr ""
+
+#: form_fields.php:151
+msgid "Enter tax rate."
+msgstr ""
+
+#: form_fields.php:117
+msgid "Enter units of measurement."
+msgstr ""
+
+#: form_fields.php:187 hooks.php:161
+msgid "Excise goods"
+msgstr ""
+
+#: form_fields.php:214 hooks.php:188
+msgid "Excise goods subject to marking with code"
+msgstr ""
+
+#: form_fields.php:213 hooks.php:187
+msgid "Excise goods subject to marking without code"
+msgstr ""
+
+#: form_fields.php:205 hooks.php:179
+msgid "Expense"
+msgstr ""
+
+#: wc-payneteasy.php:460
+msgid "Failed ajax validation."
+msgstr ""
+
+#: form_fields.php:82
+msgid "Fiscalization settings"
+msgstr ""
+
+#: hooks.php:45
+msgid "Fiscalization settings (Payment system PAYNET)"
+msgstr ""
+
+#: form_fields.php:101 form_fields.php:172 hooks.php:150
+msgid "Full payment"
+msgstr ""
+
+#: form_fields.php:190 hooks.php:164
+msgid "Gambling bet"
+msgstr ""
+
+#: form_fields.php:191 hooks.php:165
+msgid "Gambling win"
+msgstr ""
+
+#: form_fields.php:133 hooks.php:121
+msgid "Gcal"
+msgstr ""
+
+#: form_fields.php:140 hooks.php:128
+msgid "Gigabyte"
+msgstr ""
+
+#: form_fields.php:186 hooks.php:160
+msgid "Goods"
+msgstr ""
+
+#: form_fields.php:216 hooks.php:190
+msgid "Goods subject to marking with code except excise goods"
+msgstr ""
+
+#: form_fields.php:215 hooks.php:189
+msgid "Goods subject to marking without code except excise goods"
+msgstr ""
+
+#: form_fields.php:120 hooks.php:108
+msgid "Gram"
+msgstr ""
+
+#: form_fields.php:194 hooks.php:168
+msgid "Granting rights"
+msgstr ""
+
+#: form_fields.php:209 hooks.php:183
+msgid "Health insurance contributions"
+msgstr ""
+
+#: form_fields.php:208 hooks.php:182
+msgid "Health insurance contributions for IP"
+msgstr ""
+
+#: form_fields.php:135 hooks.php:123
+msgid "Hour"
+msgstr ""
+
+#. Author URI of the plugin
+msgid "https://www.paynet.ru/"
+msgstr ""
+
+#: form_fields.php:50
+msgid "In this mode, the payment for the goods is not charged."
+msgstr ""
+
+#: form_fields.php:201 hooks.php:175
+msgid "Insurance contributions"
+msgstr ""
+
+#: form_fields.php:138 hooks.php:126
+msgid "Kilobyte"
+msgstr ""
+
+#: form_fields.php:121 hooks.php:109
+msgid "Kilogram"
+msgstr ""
+
+#: form_fields.php:132 hooks.php:120
+msgid "Kilowatt hour"
+msgstr ""
+
+#: form_fields.php:130 hooks.php:118
+msgid "Liter"
+msgstr ""
+
+#: form_fields.php:54
+msgid "Logging"
+msgstr ""
+
+#: form_fields.php:57
+msgid "Logging is used to debug plugin performance by storing API request data."
+msgstr ""
+
+#: form_fields.php:192 hooks.php:166
+msgid "Lottery bet"
+msgstr ""
+
+#: form_fields.php:193 hooks.php:167
+msgid "Lottery win"
+msgstr ""
+
+#: form_fields.php:139 hooks.php:127
+msgid "Megabyte"
+msgstr ""
+
+#: form_fields.php:26
+msgid "Merchant's client ID is required to call the API."
+msgstr ""
+
+#: form_fields.php:34
+msgid "Merchant's secret key is required to call the API."
+msgstr ""
+
+#: form_fields.php:40
+msgid "Merchant-Authorization"
+msgstr ""
+
+#: form_fields.php:125 hooks.php:113
+msgid "Meter"
+msgstr ""
+
+#: form_fields.php:129 hooks.php:117
+msgid "Milliliter"
+msgstr ""
+
+#: form_fields.php:136 hooks.php:124
+msgid "Minute"
+msgstr ""
+
+#: form_fields.php:200 hooks.php:174
+msgid "Non-operating income"
+msgstr ""
+
+#: wc-payneteasy.php:324 wc-payneteasy.php:381 wc-payneteasy.php:464
+msgid "Order ID is empty."
+msgstr ""
+
+#: wc-payneteasy.php:167
+msgid "Order not found."
+msgstr ""
+
+#: form_fields.php:198 hooks.php:172
+msgid "Other calculation subject"
+msgstr ""
+
+#: form_fields.php:102 form_fields.php:173 hooks.php:151
+msgid "Partial payment and credit"
+msgstr ""
+
+#: wc-payneteasy.php:799 wc-payneteasy.php:807
+msgid "Partial refund of payment."
+msgstr ""
+
+#: form_fields.php:20
+msgid "Pay with a card of any bank without commission."
+msgstr ""
+
+#: form_fields.php:195 hooks.php:169
+msgid "Payment"
+msgstr ""
+
+#: wc-payneteasy.php:721
+msgid "Payment completed successfully."
+msgstr ""
+
+#: form_fields.php:64
+msgid ""
+"Payment in 2 stages: withholding of funds after payment, then confirmation of "
+"debit or cancelation of withholding by the merchant via personal cabinet."
+msgstr ""
+
+#: wc-payneteasy.php:210
+msgid "Payment link generated:"
+msgstr ""
+
+#: wc-payneteasy.php:204
+msgid "Payment method not \"PAYNET Payment System\"."
+msgstr ""
+
+#: wc-payneteasy.php:752 wc-payneteasy.php:758
+msgid "Payment not paid."
+msgstr ""
+
+#: wc-payneteasy.php:760
+msgid "Payment not paid. Your order has been canceled."
+msgstr ""
+
+#: wc-payneteasy.php:738
+msgid "Payment received but not confirmed."
+msgstr ""
+
+#: wc-payneteasy.php:484
+msgid "Payment refunded."
+msgstr ""
+
+#. Name of the plugin
+#: form_fields.php:13 wc-payneteasy.php:73
+msgid "Payment system PAYNET"
+msgstr ""
+
+#: form_fields.php:197 hooks.php:171
+msgid "Payout"
+msgstr ""
+
+#: form_fields.php:207 hooks.php:181
+msgid "Pension contributions"
+msgstr ""
+
+#: form_fields.php:206 hooks.php:180
+msgid "Pension contributions for IP"
+msgstr ""
+
+#: wc-payneteasy.php:74
+msgid ""
+"Plugin \"PAYNET Payment System\" for WooCommerce, which allows you to integrate "
+"online payments."
+msgstr ""
+
+#: wc-payneteasy.php:255
+msgid "Postal code"
+msgstr ""
+
+#: form_fields.php:99 form_fields.php:170 hooks.php:148
+msgid "Prepayment"
+msgstr ""
+
+#: form_fields.php:98 form_fields.php:169 hooks.php:147
+msgid "Prepayment 100%"
+msgstr ""
+
+#: form_fields.php:199 hooks.php:173
+msgid "Property right"
+msgstr ""
+
+#: wc-payneteasy.php:532
+msgid "Refund amount not specified."
+msgstr ""
+
+#: wc-payneteasy.php:773 wc-payneteasy.php:780
+msgid "Refund of payment."
+msgstr ""
+
+#: form_fields.php:42
+msgid ""
+"Request header used by the merchant resource for additional authentication when "
+"accessing the payment gateway."
+msgstr ""
+
+#: wc-payneteasy.php:468
+msgid "Required action not specified."
+msgstr ""
+
+#: form_fields.php:203 hooks.php:177
+msgid "Resort fee"
+msgstr ""
+
+#: form_fields.php:137 hooks.php:125
+msgid "Second"
+msgstr ""
+
+#: hooks.php:99
+msgid "Select an option"
+msgstr ""
+
+#: form_fields.php:78
+msgid "Select the order status to be displayed after successful payment."
+msgstr ""
+
+#: form_fields.php:71
+msgid "Send the buyer's postal code to the PAYNET payment system."
+msgstr ""
+
+#: form_fields.php:68
+msgid "Send zip code"
+msgstr ""
+
+#: form_fields.php:189 hooks.php:163
+msgid "Service"
+msgstr ""
+
+#: form_fields.php:210 hooks.php:184
+msgid "Social insurance contributions"
+msgstr ""
+
+#: form_fields.php:126 hooks.php:114
+msgid "Square centimeter"
+msgstr ""
+
+#: form_fields.php:127 hooks.php:115
+msgid "Square decimeter"
+msgstr ""
+
+#: form_fields.php:128 hooks.php:116
+msgid "Square meter"
+msgstr ""
+
+#: wc-payneteasy.php:489
+msgid "Status updated."
+msgstr ""
+
+#: form_fields.php:181 hooks.php:72
+msgid "Subject of calculation"
+msgstr ""
+
+#: form_fields.php:75
+msgid "Successful transaction order status"
+msgstr ""
+
+#: form_fields.php:148 hooks.php:70
+msgid "Tax rate"
+msgstr ""
+
+#: form_fields.php:141 hooks.php:129
+msgid "Terabyte"
+msgstr ""
+
+#: form_fields.php:47
+msgid "Test mode"
+msgstr ""
+
+#: form_fields.php:21
+msgid ""
+"The message which you want it to appear to the customer in the checkout page."
+msgstr ""
+
+#: wc-payneteasy.php:811
+msgid "The payment was partial refunded."
+msgstr ""
+
+#: wc-payneteasy.php:784
+msgid "The payment was refunded."
+msgstr ""
+
+#: wc-payneteasy.php:584
+msgid "The required data for a refund was not transmitted."
+msgstr ""
+
+#: form_fields.php:183
+msgid ""
+"The subject of calculation by default (for goods and services that do not "
+"specify the subject of calculation)."
+msgstr ""
+
+#: form_fields.php:122 hooks.php:110
+msgid "Ton"
+msgstr ""
+
+#: form_fields.php:202 hooks.php:176
+msgid "Trade fee"
+msgstr ""
+
+#: form_fields.php:61
+msgid "Two-stage payment"
+msgstr ""
+
+#: form_fields.php:114 hooks.php:69
+msgid "Units of measurement"
+msgstr ""
+
+#: form_fields.php:154 hooks.php:137
+msgid "VAT at 0%"
+msgstr ""
+
+#: form_fields.php:155 hooks.php:138
+msgid "VAT at 10%"
+msgstr ""
+
+#: form_fields.php:156 hooks.php:139
+msgid "VAT at 10/110 calculated rate"
+msgstr ""
+
+#: form_fields.php:157 hooks.php:140
+msgid "VAT at 20%"
+msgstr ""
+
+#: form_fields.php:158 hooks.php:141
+msgid "VAT at 20/120 calculated rate"
+msgstr ""
+
+#. Author of the plugin
+msgid "PAYNET"
+msgstr ""
+
+#: form_fields.php:153 hooks.php:136
+msgid "Without VAT"
+msgstr ""
+
+#: form_fields.php:188 hooks.php:162
+msgid "Work"
+msgstr ""

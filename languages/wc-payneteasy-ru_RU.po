@@ -1,0 +1,645 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Payment system PAYNET\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2023-05-30 14:30+0000\n"
+"PO-Revision-Date: 2024-07-30 21:35+0300\n"
+"Last-Translator: \n"
+"Language-Team: Русский\n"
+"Language: ru_RU\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10 >= 2 && "
+"n%10<=4 &&(n%100<10||n%100 >= 20)? 1 : 2);\n"
+"X-Generator: Poedit 3.4.4\n"
+"X-Loco-Version: 2.6.4; wp-6.2.2\n"
+"X-Domain: wc-payneteasy\n"
+
+#: form_fields.php:100 form_fields.php:171 hooks.php:149
+msgid "Advance"
+msgstr "Аванс"
+
+#: form_fields.php:196 hooks.php:170
+msgid "Agency fee"
+msgstr "Агентское вознаграждение"
+
+#. Description of the plugin
+msgid "Allows you to use Payment system PAYNET with the WooCommerce plugin."
+msgstr "Позволяет использовать Платежную систему PAYNET с плагином WooCommerce."
+
+#: form_fields.php:119 hooks.php:107
+msgid "Applies to items that can be sold by piece or unit"
+msgstr ""
+"Применяется для предметов расчета, которые могут быть реализованы поштучно или "
+"единицами"
+
+#: form_fields.php:142 hooks.php:130
+msgid "Applies when using other units of measurement"
+msgstr "Применяется при использовании иных единиц измерения"
+
+#: form_fields.php:164 hooks.php:71
+msgid "Calculation method"
+msgstr "Способ расчета"
+
+#: form_fields.php:93
+msgid "Calculation method for delivery"
+msgstr "Способ расчета для доставки"
+
+#: form_fields.php:95
+msgid "Calculation method for the delivery service."
+msgstr "Способ расчета для услуги доставки."
+
+#: form_fields.php:212 hooks.php:186
+msgid "Cash issuance by bank payment agent"
+msgstr "Выдача денежных средств банковским платежным агентом"
+
+#: form_fields.php:211 hooks.php:185
+msgid "Casino payment"
+msgstr "Платеж казино"
+
+#: form_fields.php:123 hooks.php:111
+msgid "Centimeter"
+msgstr "Сантиметр"
+
+#: form_fields.php:24
+msgid "Client ID"
+msgstr "Client ID"
+
+#: form_fields.php:32
+msgid "Client Secret"
+msgstr "Client Secret"
+
+#: form_fields.php:104 form_fields.php:175 hooks.php:153
+msgid "Credit payment"
+msgstr "Оплата кредита"
+
+#: form_fields.php:103 form_fields.php:174 hooks.php:152
+msgid "Credit transfer"
+msgstr "Передача в кредит"
+
+#: form_fields.php:131 hooks.php:119
+msgid "Cubic meter"
+msgstr "Кубический метр"
+
+#: form_fields.php:17
+msgid "Customer Message"
+msgstr "Сообщение клиенту"
+
+#: form_fields.php:134 hooks.php:122
+msgid "Day"
+msgstr "Сутки (день)"
+
+#: form_fields.php:124 hooks.php:112
+msgid "Decimeter"
+msgstr "Дециметр"
+
+#: form_fields.php:166
+msgid ""
+"Default payment method (for goods and services that do not have a payment "
+"method specified)."
+msgstr ""
+"Способ расчета по умолчанию (для товаров и услуг, у которых не указан способ "
+"расчета)."
+
+#: form_fields.php:110
+#| msgid "Default settings for products and services."
+msgid "Default settings for products and services"
+msgstr "Настройки для товаров и услуг по умолчанию"
+
+#: form_fields.php:150
+#| msgid ""
+#| "Default tax rate (for goods and services that do not have a tax rate "
+#| "specified)."
+msgid ""
+"Default tax rate (for goods and services that do not have a specified tax rate)."
+msgstr ""
+"Ставка налогообложения по умолчанию (для товаров и услуг, у которых не указана "
+"ставка налогообложения)."
+
+#: form_fields.php:116
+msgid ""
+"Default units of measure (for goods and services that do not have a specified "
+"unit of measure)."
+msgstr ""
+"Единицы измерения по умолчанию (для товаров и услуг, у которых не указана "
+"единица измерения)."
+
+#: form_fields.php:204 hooks.php:178
+msgid "Deposit"
+msgstr "Залог"
+
+#: form_fields.php:86
+msgid "Email"
+msgstr "Электронная почта"
+
+#: form_fields.php:88
+msgid "Email for sending a fiscal receipt if the user's email is not specified."
+msgstr ""
+"Электронная почта для отправки фискального чека, если не указана почта "
+"пользователя."
+
+#: form_fields.php:56
+msgid "Enable logging"
+msgstr "Включить логирование"
+
+#: form_fields.php:6
+msgid "Enable Payment system PAYNET"
+msgstr "Включить платежную систему PAYNET"
+
+#: form_fields.php:70
+msgid "Enable send zip code"
+msgstr "Включить отправку почтового индекса"
+
+#: form_fields.php:49
+msgid "Enable test mode"
+msgstr "Включить тестовый режим"
+
+#: form_fields.php:63
+msgid "Enable two-stage payment"
+msgstr "Включить двустадийный платеж"
+
+#: form_fields.php:96
+msgid "Enter calculation method for delivery."
+msgstr "Введите способ расчета для доставки."
+
+#: form_fields.php:167
+msgid "Enter calculation method."
+msgstr "Введите способ расчета."
+
+#: form_fields.php:27
+msgid "Enter Client ID"
+msgstr "Введите Client ID"
+
+#: form_fields.php:35
+msgid "Enter Client Secret"
+msgstr "Введите Client Secret"
+
+#: form_fields.php:89
+msgid "Enter email."
+msgstr "Введите адрес электронной почты."
+
+#: form_fields.php:43
+msgid "Enter Merchant-Authorization"
+msgstr "Введите Merchant-Authorization"
+
+#: form_fields.php:184
+msgid "Enter subject of calculation."
+msgstr "Введите предмет расчета."
+
+#: form_fields.php:151
+msgid "Enter tax rate."
+msgstr "Введите налоговую ставку."
+
+#: form_fields.php:117
+msgid "Enter units of measurement."
+msgstr "Введите единицы измерения."
+
+#: form_fields.php:187 hooks.php:161
+#| msgid "Excisable goods"
+msgid "Excise goods"
+msgstr "Подакцизный товар"
+
+#: form_fields.php:214 hooks.php:188
+msgid "Excise goods subject to marking with code"
+msgstr ""
+"Подакцизный товар, подлежащий маркировке средством идентификации, имеющий код "
+"маркировки"
+
+#: form_fields.php:213 hooks.php:187
+msgid "Excise goods subject to marking without code"
+msgstr ""
+"Подакцизный товар, подлежащий маркировке средством идентификации, не имеющий "
+"кода маркировки"
+
+#: form_fields.php:205 hooks.php:179
+msgid "Expense"
+msgstr "Расход"
+
+#: wc-payneteasy.php:460
+msgid "Failed ajax validation."
+msgstr "Не удалось выполнить проверку ajax."
+
+#: form_fields.php:82
+msgid "Fiscalization settings"
+msgstr "Настройки фискализации"
+
+#: hooks.php:45
+msgid "Fiscalization settings (Payment system PAYNET)"
+msgstr "Настройки фискализации (Платежная система PAYNET)"
+
+#: form_fields.php:101 form_fields.php:172 hooks.php:150
+msgid "Full payment"
+msgstr "Полный расчёт"
+
+#: form_fields.php:190 hooks.php:164
+msgid "Gambling bet"
+msgstr "Ставка азартной игры"
+
+#: form_fields.php:191 hooks.php:165
+msgid "Gambling win"
+msgstr "Выигрыш азартной игры"
+
+#: form_fields.php:133 hooks.php:121
+msgid "Gcal"
+msgstr "Гигакалория"
+
+#: form_fields.php:140 hooks.php:128
+msgid "Gigabyte"
+msgstr "Гигабайт"
+
+#: form_fields.php:186 hooks.php:160
+msgid "Goods"
+msgstr "Товар"
+
+#: form_fields.php:216 hooks.php:190
+msgid "Goods subject to marking with code except excise goods"
+msgstr ""
+"Товар, подлежащий маркировке средством идентификации, имеющий код маркировки, "
+"за исключением подакцизного товара"
+
+#: form_fields.php:215 hooks.php:189
+msgid "Goods subject to marking without code except excise goods"
+msgstr ""
+"Товар, подлежащий маркировке средством идентификации, не имеющий кода "
+"маркировки, за исключением подакцизного товара"
+
+#: form_fields.php:120 hooks.php:108
+msgid "Gram"
+msgstr "Грамм"
+
+#: form_fields.php:194 hooks.php:168
+msgid "Granting rights"
+msgstr "Предоставление прав"
+
+#: form_fields.php:209 hooks.php:183
+msgid "Health insurance contributions"
+msgstr "Взносы на ОМС"
+
+#: form_fields.php:208 hooks.php:182
+msgid "Health insurance contributions for IP"
+msgstr "Взносы на ОМС ИП"
+
+#: form_fields.php:135 hooks.php:123
+msgid "Hour"
+msgstr "Час"
+
+#. Author URI of the plugin
+msgid "https://www.paynet.ru/"
+msgstr "https://www.paynet.ru/"
+
+#: form_fields.php:50
+msgid "In this mode, the payment for the goods is not charged."
+msgstr "В этом режиме оплата за товар не взимается."
+
+#: form_fields.php:201 hooks.php:175
+msgid "Insurance contributions"
+msgstr "Страховые взносы"
+
+#: form_fields.php:138 hooks.php:126
+msgid "Kilobyte"
+msgstr "Килобайт"
+
+#: form_fields.php:121 hooks.php:109
+msgid "Kilogram"
+msgstr "Килограмм"
+
+#: form_fields.php:132 hooks.php:120
+msgid "Kilowatt hour"
+msgstr "Киловатт час"
+
+#: form_fields.php:130 hooks.php:118
+msgid "Liter"
+msgstr "Литр"
+
+#: form_fields.php:54
+msgid "Logging"
+msgstr "Логирование"
+
+#: form_fields.php:57
+msgid "Logging is used to debug plugin performance by storing API request data."
+msgstr ""
+"Логирование используется для отладки производительности плагина путем "
+"сохранения данных запросов к API."
+
+#: form_fields.php:192 hooks.php:166
+#| msgid "Lottery Bet"
+msgid "Lottery bet"
+msgstr "Ставка лотереи"
+
+#: form_fields.php:193 hooks.php:167
+msgid "Lottery win"
+msgstr "Выигрыш лотереи"
+
+#: form_fields.php:139 hooks.php:127
+msgid "Megabyte"
+msgstr "Мегабайт"
+
+#: form_fields.php:26
+#| msgid "Merchant's client ID is required to call the API"
+msgid "Merchant's client ID is required to call the API."
+msgstr "Для вызова API требуется идентификатор клиента продавца."
+
+#: form_fields.php:34
+#| msgid "Merchant's secret key is required to call the API"
+msgid "Merchant's secret key is required to call the API."
+msgstr "Для вызова API требуется секретный ключ продавца."
+
+#: form_fields.php:40
+msgid "Merchant-Authorization"
+msgstr "Merchant-Authorization"
+
+#: form_fields.php:125 hooks.php:113
+msgid "Meter"
+msgstr "Метр"
+
+#: form_fields.php:129 hooks.php:117
+msgid "Milliliter"
+msgstr "Миллилитр"
+
+#: form_fields.php:136 hooks.php:124
+msgid "Minute"
+msgstr "Минута"
+
+#: form_fields.php:200 hooks.php:174
+msgid "Non-operating income"
+msgstr "Внереализационный доход"
+
+#: wc-payneteasy.php:324 wc-payneteasy.php:381 wc-payneteasy.php:464
+msgid "Order ID is empty."
+msgstr "Идентификатор заказа пуст."
+
+#: wc-payneteasy.php:167
+msgid "Order not found."
+msgstr "Заказ не найден."
+
+#: form_fields.php:198 hooks.php:172
+msgid "Other calculation subject"
+msgstr "Иной предмет расчёта"
+
+#: form_fields.php:102 form_fields.php:173 hooks.php:151
+#| msgid "Partial settlement and credit"
+msgid "Partial payment and credit"
+msgstr "Частичный расчет и кредит"
+
+#: wc-payneteasy.php:799 wc-payneteasy.php:807
+msgid "Partial refund of payment."
+msgstr "Частичный возврат оплаты."
+
+#: form_fields.php:20
+#| msgid "Pay with a card of any bank without commission"
+msgid "Pay with a card of any bank without commission."
+msgstr "Оплата картой любого банка без комиссии."
+
+#: form_fields.php:195 hooks.php:169
+msgid "Payment"
+msgstr "Платеж"
+
+#: wc-payneteasy.php:721
+msgid "Payment completed successfully."
+msgstr "Платеж успешно завершен."
+
+#: form_fields.php:64
+#| msgid ""
+#| "Payment in 2 stages: blocking of funds after payment, then confirmation of "
+#| "debit or cancelation of blocking by merchant via personal cabinet."
+msgid ""
+"Payment in 2 stages: withholding of funds after payment, then confirmation of "
+"debit or cancelation of withholding by the merchant via personal cabinet."
+msgstr ""
+"Платеж в 2 этапа: удержание средств после оплаты, затем подтверждение списания "
+"или отмена удержания мерчантом через личный кабинет."
+
+#: wc-payneteasy.php:210
+msgid "Payment link generated:"
+msgstr "Создана платежная ссылка:"
+
+#: wc-payneteasy.php:204
+#| msgid "Payment method not \"PAYNET Payment System\""
+msgid "Payment method not \"PAYNET Payment System\"."
+msgstr "Способ оплаты не \"Платежная система PAYNET\"."
+
+#: wc-payneteasy.php:752 wc-payneteasy.php:758
+#| msgid "Payment not paid"
+msgid "Payment not paid."
+msgstr "Оплата не произведена."
+
+#: wc-payneteasy.php:760
+msgid "Payment not paid. Your order has been canceled."
+msgstr "Оплата не прошла успешно. Ваш заказ был отменен."
+
+#: wc-payneteasy.php:738
+msgid "Payment received but not confirmed."
+msgstr "Платёж получен, но не подтверждён"
+
+#: wc-payneteasy.php:484
+msgid "Payment refunded."
+msgstr "Оплата возвращена."
+
+#. Name of the plugin
+#: form_fields.php:13 wc-payneteasy.php:73
+msgid "Payment system PAYNET"
+msgstr "Платёжная система PAYNET"
+
+#: form_fields.php:197 hooks.php:171
+msgid "Payout"
+msgstr "Выплата"
+
+#: form_fields.php:207 hooks.php:181
+msgid "Pension contributions"
+msgstr "Взносы ОПС"
+
+#: form_fields.php:206 hooks.php:180
+msgid "Pension contributions for IP"
+msgstr "Взносы на ОПС ИП"
+
+#: wc-payneteasy.php:74
+msgid ""
+"Plugin \"PAYNET Payment System\" for WooCommerce, which allows you to integrate "
+"online payments."
+msgstr ""
+"Плагин «Платежная система PAYNET» для WooCommerce, позволяющий интегрировать "
+"онлайн-платежи."
+
+#: wc-payneteasy.php:255
+msgid "Postal code"
+msgstr "Почтовый индекс"
+
+#: form_fields.php:99 form_fields.php:170 hooks.php:148
+#| msgid "Pre-payment"
+msgid "Prepayment"
+msgstr "Предоплата"
+
+#: form_fields.php:98 form_fields.php:169 hooks.php:147
+#| msgid "Pre-payment 100%"
+msgid "Prepayment 100%"
+msgstr "Предоплата 100%"
+
+#: form_fields.php:199 hooks.php:173
+msgid "Property right"
+msgstr "Имущественное право"
+
+#: wc-payneteasy.php:532
+msgid "Refund amount not specified."
+msgstr "Сумма возврата не указана."
+
+#: wc-payneteasy.php:773 wc-payneteasy.php:780
+msgid "Refund of payment."
+msgstr "Возврат платежа."
+
+#: form_fields.php:42
+msgid ""
+"Request header used by the merchant resource for additional authentication when "
+"accessing the payment gateway."
+msgstr ""
+"Заголовок запроса, используемый ресурсом мерчанта для дополнительной "
+"аутентификации при доступе к платежному шлюзу."
+
+#: wc-payneteasy.php:468
+msgid "Required action not specified."
+msgstr "Требуемое действие не указано."
+
+#: form_fields.php:203 hooks.php:177
+msgid "Resort fee"
+msgstr "Курортный сбор"
+
+#: form_fields.php:137 hooks.php:125
+msgid "Second"
+msgstr "Секунда"
+
+#: hooks.php:99
+msgid "Select an option"
+msgstr "Выберите опцию"
+
+#: form_fields.php:78
+msgid "Select the order status to be displayed after successful payment."
+msgstr "Выберите статус заказа, который будет отображаться после успешной оплаты."
+
+#: form_fields.php:71
+msgid "Send the buyer's postal code to the PAYNET payment system."
+msgstr "Отправлять почтовый индекс покупателя в платежную систему PAYNET."
+
+#: form_fields.php:68
+msgid "Send zip code"
+msgstr "Отправлять почтовый индекс"
+
+#: form_fields.php:189 hooks.php:163
+msgid "Service"
+msgstr "Услуга"
+
+#: form_fields.php:210 hooks.php:184
+msgid "Social insurance contributions"
+msgstr "Взносы на ОСС"
+
+#: form_fields.php:126 hooks.php:114
+msgid "Square centimeter"
+msgstr "Квадратный сантиметр"
+
+#: form_fields.php:127 hooks.php:115
+msgid "Square decimeter"
+msgstr "Квадратный дециметр"
+
+#: form_fields.php:128 hooks.php:116
+msgid "Square meter"
+msgstr "Квадратный метр"
+
+#: wc-payneteasy.php:489
+msgid "Status updated."
+msgstr "Статус обновлен."
+
+#: form_fields.php:181 hooks.php:72
+msgid "Subject of calculation"
+msgstr "Предмет расчета"
+
+#: form_fields.php:75
+msgid "Successful transaction order status"
+msgstr "Статус заказа успешной транзакции"
+
+#: form_fields.php:148 hooks.php:70
+msgid "Tax rate"
+msgstr "Налоговая ставка"
+
+#: form_fields.php:141 hooks.php:129
+msgid "Terabyte"
+msgstr "Терабайт"
+
+#: form_fields.php:47
+msgid "Test mode"
+msgstr "Тестовый режим"
+
+#: form_fields.php:21
+msgid ""
+"The message which you want it to appear to the customer in the checkout page."
+msgstr ""
+"Сообщение, которое будет отображалось покупателю на странице оформления заказа."
+
+#: wc-payneteasy.php:811
+msgid "The payment was partial refunded."
+msgstr "Оплата была частично возвращена."
+
+#: wc-payneteasy.php:784
+msgid "The payment was refunded."
+msgstr "Платеж был возвращен."
+
+#: wc-payneteasy.php:584
+#| msgid "The required data for a refund was not transmitted"
+msgid "The required data for a refund was not transmitted."
+msgstr "Не были переданы необходимые данные для возврата денег."
+
+#: form_fields.php:183
+msgid ""
+"The subject of calculation by default (for goods and services that do not "
+"specify the subject of calculation)."
+msgstr ""
+"Предмет расчета по умолчанию (для товаров и услуг, у которых не указан предмет "
+"расчета)."
+
+#: form_fields.php:122 hooks.php:110
+msgid "Ton"
+msgstr "Тонна"
+
+#: form_fields.php:202 hooks.php:176
+msgid "Trade fee"
+msgstr "Торговый сбор"
+
+#: form_fields.php:61
+msgid "Two-stage payment"
+msgstr "Двустадийный платеж"
+
+#: form_fields.php:114 hooks.php:69
+msgid "Units of measurement"
+msgstr "Единицы измерения"
+
+#: form_fields.php:154 hooks.php:137
+msgid "VAT at 0%"
+msgstr "НДС по ставке 0%"
+
+#: form_fields.php:155 hooks.php:138
+#| msgid "VAT 10%"
+msgid "VAT at 10%"
+msgstr "НДС чека по ставке 10%"
+
+#: form_fields.php:156 hooks.php:139
+msgid "VAT at 10/110 calculated rate"
+msgstr "НДС чека по расчетной ставке 10/110"
+
+#: form_fields.php:157 hooks.php:140
+#| msgid "VAT 20%"
+msgid "VAT at 20%"
+msgstr "НДС чека по ставке 20%"
+
+#: form_fields.php:158 hooks.php:141
+msgid "VAT at 20/120 calculated rate"
+msgstr "НДС чека по расчетной ставке 20/120"
+
+#. Author of the plugin
+msgid "PAYNET"
+msgstr "PAYNET"
+
+#: form_fields.php:153 hooks.php:136
+msgid "Without VAT"
+msgstr "Без НДС"
+
+#: form_fields.php:188 hooks.php:162
+msgid "Work"
+msgstr "Работа"

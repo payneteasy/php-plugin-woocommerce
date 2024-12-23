@@ -1,7 +1,7 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: Payment system PAYNET\n"
+"Project-Id-Version: Payment system PAYNETEASY\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2024-07-30 21:35+0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
@@ -13,7 +13,7 @@ msgstr ""
 "Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
 "X-Generator: Poedit 3.4.4\n"
 "X-Loco-Version: 2.6.4; wp-6.2.2\n"
-"X-Domain: wc-payneteasy\n"
+"X-Domain: mail-domain-com\n"
 
 #: form_fields.php:100 form_fields.php:171 hooks.php:149
 msgid "Advance"
@@ -24,7 +24,7 @@ msgid "Agency fee"
 msgstr ""
 
 #. Description of the plugin
-msgid "Allows you to use Payment system PAYNET with the WooCommerce plugin."
+msgid "Allows you to use Payment system PAYNETEASY with the WooCommerce plugin."
 msgstr ""
 
 #: form_fields.php:119 hooks.php:107
@@ -129,7 +129,7 @@ msgid "Enable logging"
 msgstr ""
 
 #: form_fields.php:6
-msgid "Enable Payment system PAYNET"
+msgid "Enable Payment system PAYNETEASY"
 msgstr ""
 
 #: form_fields.php:70
@@ -205,7 +205,7 @@ msgid "Fiscalization settings"
 msgstr ""
 
 #: hooks.php:45
-msgid "Fiscalization settings (Payment system PAYNET)"
+msgid "Fiscalization settings (Payment system PAYNETEASY)"
 msgstr ""
 
 #: form_fields.php:101 form_fields.php:172 hooks.php:150
@@ -261,7 +261,7 @@ msgid "Hour"
 msgstr ""
 
 #. Author URI of the plugin
-msgid "https://www.paynet.ru/"
+msgid "https://www.payneteasy.com/"
 msgstr ""
 
 #: form_fields.php:50
@@ -400,7 +400,7 @@ msgstr ""
 
 #. Name of the plugin
 #: form_fields.php:13 wc-payneteasy.php:73
-msgid "Payment system PAYNET"
+msgid "Payment system PAYNETEASY"
 msgstr ""
 
 #: form_fields.php:197 hooks.php:171

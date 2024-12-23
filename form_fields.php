@@ -3,14 +3,14 @@ return [
     'enabled' => [
         'title' => __('Enable/Disable', 'woocommerce'),
         'type' => 'checkbox',
-        'label' => __('Enable Payment system PAYNET', 'wc-payneteasy'),
+        'label' => __('Enable Payment system PAYNETEASY', 'wc-payneteasy'),
         'default' => 'yes'
     ],
     'title' => [
         'title' => __('Title', 'woocommerce'),
         'type' => 'text',
         'description' => __('This controls the title which the user sees during checkout.', 'woocommerce'),
-        'default' => __('Payment system PAYNET', 'wc-payneteasy'),
+        'default' => __('Payment system PAYNETEASY', 'wc-payneteasy'),
         'desc_tip' => true,
     ],
     'description' => [

@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: Payment system PAYNET\n"
+"Project-Id-Version: Payment system PAYNETEASY\n"
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2023-05-30 14:30+0000\n"
 "PO-Revision-Date: 2024-07-30 21:35+0300\n"
@@ -25,8 +25,8 @@ msgid "Agency fee"
 msgstr "Агентское вознаграждение"
 
 #. Description of the plugin
-msgid "Allows you to use Payment system PAYNET with the WooCommerce plugin."
-msgstr "Позволяет использовать Платежную систему PAYNET с плагином WooCommerce."
+msgid "Allows you to use Payment system PAYNETEASY with the WooCommerce plugin."
+msgstr "Позволяет использовать Платежную систему PAYNETEASY с плагином WooCommerce."
 
 #: form_fields.php:119 hooks.php:107
 msgid "Applies to items that can be sold by piece or unit"
@@ -144,8 +144,8 @@ msgid "Enable logging"
 msgstr "Включить логирование"
 
 #: form_fields.php:6
-msgid "Enable Payment system PAYNET"
-msgstr "Включить платежную систему PAYNET"
+msgid "Enable Payment system PAYNETEASY"
+msgstr "Включить платежную систему PAYNETEASY"
 
 #: form_fields.php:70
 msgid "Enable send zip code"
@@ -225,8 +225,8 @@ msgid "Fiscalization settings"
 msgstr "Настройки фискализации"
 
 #: hooks.php:45
-msgid "Fiscalization settings (Payment system PAYNET)"
-msgstr "Настройки фискализации (Платежная система PAYNET)"
+msgid "Fiscalization settings (Payment system PAYNETEASY)"
+msgstr "Настройки фискализации (Платежная система PAYNETEASY)"
 
 #: form_fields.php:101 form_fields.php:172 hooks.php:150
 msgid "Full payment"
@@ -285,8 +285,8 @@ msgid "Hour"
 msgstr "Час"
 
 #. Author URI of the plugin
-msgid "https://www.paynet.ru/"
-msgstr "https://www.paynet.ru/"
+msgid "https://www.payneteasy.com/"
+msgstr "https://www.payneteasy.com/"
 
 #: form_fields.php:50
 msgid "In this mode, the payment for the goods is not charged."
@@ -417,7 +417,7 @@ msgstr "Создана платежная ссылка:"
 #: wc-payneteasy.php:204
 #| msgid "Payment method not \"PAYNET Payment System\""
 msgid "Payment method not \"PAYNET Payment System\"."
-msgstr "Способ оплаты не \"Платежная система PAYNET\"."
+msgstr "Способ оплаты не \"Платежная система PAYNETEASY\"."
 
 #: wc-payneteasy.php:752 wc-payneteasy.php:758
 #| msgid "Payment not paid"
@@ -438,8 +438,8 @@ msgstr "Оплата возвращена."
 
 #. Name of the plugin
 #: form_fields.php:13 wc-payneteasy.php:73
-msgid "Payment system PAYNET"
-msgstr "Платёжная система PAYNET"
+msgid "Payment system PAYNETEASY"
+msgstr "Платёжная система PAYNETEASY"
 
 #: form_fields.php:197 hooks.php:171
 msgid "Payout"
@@ -458,7 +458,7 @@ msgid ""
 "Plugin \"PAYNET Payment System\" for WooCommerce, which allows you to integrate "
 "online payments."
 msgstr ""
-"Плагин «Платежная система PAYNET» для WooCommerce, позволяющий интегрировать "
+"Плагин «Платежная система PAYNETEASY» для WooCommerce, позволяющий интегрировать "
 "онлайн-платежи."
 
 #: wc-payneteasy.php:255
@@ -517,7 +517,7 @@ msgstr "Выберите статус заказа, который будет о
 
 #: form_fields.php:71
 msgid "Send the buyer's postal code to the PAYNET payment system."
-msgstr "Отправлять почтовый индекс покупателя в платежную систему PAYNET."
+msgstr "Отправлять почтовый индекс покупателя в платежную систему PAYNETEASY."
 
 #: form_fields.php:68
 msgid "Send zip code"

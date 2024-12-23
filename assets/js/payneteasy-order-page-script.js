@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     });
 
                     // Запрос подтверждения у пользователя
-                    if (confirm('Выполнить возврат в платёжной системе PAYNET?')) {
+                    if (confirm('Выполнить возврат в платёжной системе PAYNETEASY?')) {
                         // Отправляем AJAX-запрос с помощью fetch
                         fetch(payneteasy_ajax_var.api_url, {
                             method: 'POST',
@@ -129,10 +129,10 @@ document.addEventListener('DOMContentLoaded', function() {
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert(`Платёжная система PAYNET: ${data.message}`);
+                                alert(`Платёжная система PAYNETEASY: ${data.message}`);
                                 originalButton.click();
                             } else {
-                                if (confirm(`Платёжная система PAYNET: ${data.message}. Продолжит возврат в WordPress?`)) {
+                                if (confirm(`Платёжная система PAYNETEASY: ${data.message}. Продолжит возврат в WordPress?`)) {
                                     originalButton.click();
                                 }
                             }

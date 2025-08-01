@@ -74,6 +74,13 @@ return [
         'description' => __('3D Secure or Non 3D Secure (WORK ONLY WITH DIRECT INTEGRATION METHOD)', 'wc-payneteasy'),
         'default' => 'no'
     ],
+		'require_ssn' => [
+        'title' => __('Require CPF', 'wc-payneteasy'),
+        'type' => 'checkbox',
+        'label' => __('Require Document Number (CPF)', 'wc-payneteasy'),
+        'description' => __('Show CPF input field at checkout page', 'wc-payneteasy'),
+        'default' => 'no'
+		],
     'live_url' => [
         'title' => __('Gateway url (LIVE)', 'wc-payneteasy'),
         'type' => 'text',
@@ -85,6 +92,12 @@ return [
         'type' => 'text',
         'description' => __("https://sandbox.payneteasy.com/ etc.", 'wc-payneteasy'),
         'placeholder' => __('Enter sandbox url.', 'wc-payneteasy'),
+    ],
+		'notify_url' => [
+        'title' => __('Notify url', 'wc-payneteasy'),
+        'type' => 'text',
+        'description' => __('Notify gate url sprintf mask, order_id being parameter', 'wc-payneteasy'),
+        'placeholder' => __('Enter notify gate url mask.', 'wc-payneteasy'),
     ],
     'transaction_end' => [
         'title' => __('Successful transaction order status', 'wc-payneteasy'),

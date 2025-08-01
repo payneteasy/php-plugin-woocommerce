@@ -417,7 +417,7 @@ function init_wc_paynet_payment_gateway(): void {
 					wc_add_notice( 'Card Number is required!', 'error' );
 					return false;
 				}
-				if( empty( $_POST[ 'ssn' ] ) ) {
+				if($this->require_ssn && empty( $_POST[ 'ssn' ] ) ) {
 					wc_add_notice( 'CPF is required!', 'error' );
 					return false;
 				}

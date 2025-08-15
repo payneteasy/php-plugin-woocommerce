@@ -4,144 +4,75 @@ namespace Payneteasy\Classes\Api;
 
 (defined('ABSPATH') || PHP_SAPI == 'cli') or die('Restricted access');
 
-use \Payneteasy\Classes\Common\Request,
-    \Payneteasy\Classes\Exception\PayneteasyException,
-    \Symfony\Component\Dotenv\Dotenv;
+use \Payneteasy\Classes\Exception\PayneteasyException;
 
-/**
- * Класс PaynetApi предоставляет методы для взаимодействия с API PAYNET.
- */
-class PaynetApi extends Request
-{
-    protected $url = 'paynet/api/v2/';
-    protected $live_url = '';
-    protected $sandbox_url = '';
-    protected $login = '';
-    protected $password = '';
-    protected $endpoint = '';
-    protected $integration_method = ''; // direct & form
-    protected $type = ''; // live & sandbox
+class PaynetApi {
+	private const URL = 'paynet/api/v2/';
+	private string $login;
+	private string $gate;
+	private string $control_key;
+	private string $endpoint;
+	private bool $is_direct;
 
-    public function __construct($login, $password, $endpoint, $integration_method, $type) {
-        $this->login = $login;
-        $this->password = $password;
-        $this->endpoint = $endpoint;
-        $this->integration_method = $integration_method;
-        $this->type = $type;
-    }
+	public function __construct(string $gate, string $login, string $control_key, string $endpoint, bool $is_direct) {
+		$this->gate = $gate;
+		$this->login = $login;
+		$this->control_key = $control_key;
+		$this->endpoint = $endpoint;
+		$this->is_direct = $is_direct;
+	}
 
-    public function saleDirect($data, $integration_method, $type, $action_url, $endpoint)
-    {
-        return $this->execute('sale/' . $endpoint, $data, 'POST', $integration_method, $type, $action_url);
-    }
+	private function signed(array $data, string $str=null, bool $add_login=false): array {
+		if (isset($str) || $add_login)
+			$data['login'] = $this->login;
 
-    public function return($data, $integration_method, $type, $action_url, $endpoint)
-    {
-        return $this->execute('return/' . $endpoint, $data, 'POST', $integration_method, $type, $action_url);
-    }
+		$data['control'] = sha1($str ?? $this->endpoint.$data['client_orderid'].($data['amount'] * 100).$data['email'].$this->control_key);
+		return $data;
+	}
 
-    public function status($data, $integration_method, $type, $action_url, $endpoint)
-    {
-        return $this->execute('status/' . $endpoint, $data, 'POST', $integration_method, $type, $action_url);
-    }
+	public function is_direct(): bool
+		{ return $this->is_direct; }
 
-    public function saleForm($data, $integration_method, $type, $action_url, $endpoint)
-    {
-        return $this->execute('sale-form/' . $endpoint, $data, 'POST', $integration_method, $type, $action_url);
-    }
+	public function sale(array $data): array
+		{ return $this->execute($this->is_direct ? 'sale' : 'sale-form', $this->signed($data)); }
 
-    protected function execute($action, $data, $method, $integration_method, $type, $action_url) {
-        return $this->curlRequestHandler($action, $data, $method, $integration_method, $type, $action_url);
-    }
+	public function return(array $data): array
+		{ return $this->execute('return', $this->signed($data, null, true)); }
 
-    protected function curlRequestHandler($action, $data, $method, $integration_method, $type, $action_url)
-    {
-        $curl = curl_init($action_url.$this->url.$action);
+	public function status(array $data): array
+		{ return $this->execute('status', $this->signed($data, $this->login.$data['client_orderid'].$data['orderid'].$this->control_key)); }
 
-        curl_setopt_array($curl, array
-        (
-            CURLOPT_HEADER         => 0,
-            CURLOPT_USERAGENT      => 'Payneteasy-Client/1.0',
-            CURLOPT_SSL_VERIFYHOST => 0,
-            CURLOPT_SSL_VERIFYPEER => 0,
-            CURLOPT_POST           => 1,
-            CURLOPT_RETURNTRANSFER => 1
-        ));
+	private function execute(string $action, array $data): array {
+		$curl = curl_init($this->gate . self::URL . "$action/{$this->endpoint}");
 
-        curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($data));
+		curl_setopt_array($curl, [
+			CURLOPT_HEADER					=> 0,
+			CURLOPT_USERAGENT				=> 'Payneteasy-Client/1.0',
+			CURLOPT_SSL_VERIFYHOST	=> 0,
+			CURLOPT_SSL_VERIFYPEER	=> 0,
+			CURLOPT_POST						=> 1,
+			CURLOPT_RETURNTRANSFER	=> 1,
+			CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
-        $response = curl_exec($curl);
+		$response = curl_exec($curl);
 
-        if(curl_errno($curl))
-        {
-            $error_message  = 'Error occurred: ' . curl_error($curl);
-            $error_code     = curl_errno($curl);
-        }
-        elseif(curl_getinfo($curl, CURLINFO_HTTP_CODE) != 200)
-        {
-            $error_code     = curl_getinfo($curl, CURLINFO_HTTP_CODE);
-            $error_message  = "Error occurred. HTTP code: '{$error_code}'";
-        }
+		if (curl_errno($curl))
+			list($error_code, $error_message) = [ curl_errno($curl), 'Error occurred: ' . curl_error($curl) ];
+		elseif (curl_getinfo($curl, CURLINFO_HTTP_CODE) != 200)
+			list($error_code, $error_message) = [ curl_getinfo($curl, CURLINFO_HTTP_CODE), "Error occurred. HTTP code: '{$error_code}'" ];
 
-        curl_close($curl);
+		curl_close($curl);
 
-        if (!empty($error_message))
-        {
-            throw new PayneteasyException($error_message, [
-                'response' => $error_code
-            ]);
-        }
+		if (!empty($error_message))
+			throw new PayneteasyException($error_message, [ 'response' => $error_code ]);
 
-        if(empty($response))
-        {
-            throw new PayneteasyException('Host response is empty', [
-                'response' => $response
-            ]);
-        }
+		if (empty($response))
+			throw new PayneteasyException('Host response is empty', [ 'response' => $response ]);
 
-        $responseFields = array();
+		parse_str($response, $result);
+		foreach ($result as $k => $v)
+			$result[$k] = rtrim($v);
 
-        parse_str($response, $responseFields);
-
-        return $responseFields;
-
-    }
-
-    protected function parseHeadersToArray($rawHeaders)
-    {
-        $lines = explode("\r\n", $rawHeaders);
-        $headers = [];
-        foreach($lines as $line) {
-            if (strpos($line, ':') === false ){
-                continue;
-            }
-            list($key, $value) = explode(': ', $line);
-            $headers[$key] = $value;
-        }
-        return $headers;
-    }
-
-    protected function encode($data)
-    {
-        if (is_string($data)) {
-            return $data;
-        }
-        $result = json_encode($data);
-        $error = json_last_error();
-        if ($error != JSON_ERROR_NONE) {
-            throw new PayneteasyException('JSON Error: ', [
-                'response' => json_last_error_msg()
-            ]);
-        }
-        return $result;
-    }
-
-    public static function prepareOrderId($orderId, $forUrl = false)
-    {
-        $orderId = str_replace(['/','#','?','|',' '], ['-'], $orderId);
-        if ($forUrl) {
-            $orderId = urlencode($orderId);
-        }
-        return $orderId;
-    }
+		return $result;
+	}
 }

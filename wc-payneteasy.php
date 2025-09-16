@@ -48,10 +48,16 @@ function init_wc_paynet_payment_gateway(): void {
 			$this->init_form_fields();
 			$this->init_settings();
 
+			add_filter('wc_order_statuses', [$this, 'order_statuses']);
+
 			add_action('woocommerce_update_options_payment_gateways_'.$this->id, [$this, 'process_admin_options']);
 			add_action('woocommerce_api_'.$this->id.'_return', [$this, 'return_handler']);
 			add_action('woocommerce_api_'.$this->id.'_webhook', [$this, 'webhook_handler']);
 			add_action('woocommerce_api_'.$this->id.'_ajax', [$this, 'ajax_handler']);
+		}
+
+		public function order_statuses(array $statuses): array {
+			return array_merge($statuses, [ 'wc-chargeback' => _x('Chargeback', 'Order status', 'woocommerce') ]);
 		}
 
 		private function init_payment_settings(): array {
@@ -74,11 +80,9 @@ function init_wc_paynet_payment_gateway(): void {
 		public function init_form_fields(): void
 			{ $this->form_fields = include 'form_fields.php'; }
 
-		private function set_order(int $order_id): self {
-			if ($order = wc_get_order($order_id)) {
+		private function set_order(int $order_id): void {
+			if ($order = wc_get_order($order_id))
 				$this->order = $order;
-				return $this;
-			}
 			else
 				throw new \Exception(__('Order not found.', 'wc-payneteasy'));
 		}
@@ -105,7 +109,7 @@ function init_wc_paynet_payment_gateway(): void {
 		}
 
 		private function make_sale(): array {
-			list($order_id, $email, $total) = [ $this->order->get_id(), $this->order->get_billing_email(), $this->order->get_total() ];
+			[ $order_id, $email, $total ] = [ $this->order->get_id(), $this->order->get_billing_email(), $this->order->get_total() ];
 			$return_url = home_url("?wc-api={$this->id}_return&orderId=$order_id");
 
 			$response = $this->api->sale([
@@ -128,10 +132,10 @@ function init_wc_paynet_payment_gateway(): void {
 				'expire_year' => "{$_POST['expire_year']}",
 				'first_name' => $this->order->get_shipping_first_name() ?: $this->order->get_billing_first_name(),
 				'last_name'  => $this->order->get_shipping_last_name() ?: $this->order->get_billing_last_name(),
-				'redirect_success_url' => $return_url, # $this->get_return_url($this->order),
+				'redirect_success_url' => $return_url,
 				'redirect_fail_url' => $return_url, # wc_get_cart_url(),
 				'redirect_url' => $return_url,
-				'server_callback_url' => $return_url,
+				'server_callback_url' => home_url('?wc-api=wc_payneteasy_webhook'), # $return_url,
 				'notify_url' => sprintf($this->notify_url, $order_id) ]);
 
 			global $wpdb;
@@ -196,21 +200,20 @@ function init_wc_paynet_payment_gateway(): void {
 					throw new \Exception(__('Order ID is empty.', 'wc-payneteasy'));
 
 				$this->set_order($order_id);
-				$payment_status = $this->get_payment_status($three_d_html);
-				$this->change_payment_status($payment_status);
+				$this->change_payment_status($payment_status = $this->get_payment_status($three_d_html));
 
 				switch ($payment_status) {
-					case 'processing':
+					case 'sale/processing':
 						echo $three_d_html;
 						die();
-					case 'approved':
+					case 'sale/approved':
 						WC()->cart->empty_cart();
 						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was approved. Thank you.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
 						die();
-					case 'error':
+					case 'sale/error':
 						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was not completed because of an error. Could you try again.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
 						die();
-					case 'declined':
+					case 'sale/declined':
 						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was declined. Could you try again.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
 						die();
 				}
@@ -220,8 +223,7 @@ function init_wc_paynet_payment_gateway(): void {
 		}
 
 		public function webhook_handler(): void {
-			$php_input = json_decode(file_get_contents('php://input'), true) ?: null;
-			$order_id = $php_input['object']['orderId'] ?? '';
+			[ $order_id, $type ] = [ $_GET['client_orderid'], $_GET['type'] ];
 
 			try {
 				if (empty($order_id))
@@ -229,26 +231,32 @@ function init_wc_paynet_payment_gateway(): void {
 
 				$this->set_order($order_id);
 
-				if ($this->order->get_status() === $php_input['object']['status']['value'])
+				if ($this->order->get_status() === $type)
 					die('OK');
 
 				$this->change_payment_status($this->get_payment_status());
 
-				die('OK');
+				exit;
 			}
 			catch (\Exception | PayneteasyException $e)
 				{ wp_die($e->getMessage()); }
 		}
 
 		private function change_payment_status(string $payment_status): void {
-			$method = 'actions_for_'.([ 'approved' => 'paid', 'processing' => 'hold' ][$payment_status] ?? 'unpaid').'_order';
+			$method = 'actions_for_'.([
+					'sale/approved' => 'paid',
+					'sale/processing' => 'hold',
+					'chargeback/approved' => 'chargeback',
+					'reversal/approved' => 'refunded'
+				][$payment_status] ?? 'unpaid')
+				.'_order';
+
 			$this->$method();
 		}
 
 		# проверяем статус платежа, и если он approved, то устанавливаем заказ в CMS как оплаченный.
 		public function ajax_handler(): void {
-			$order_id = $_POST['order_id'] ?? '';
-			$action = $_POST['action'] ?? '';
+			[ $order_id, $action ] = [ $_POST['order_id'], $_POST['action'] ];
 
 			try {
 				if (!wp_verify_nonce($_POST['nonce'] ?? '', 'payneteasy-ajax-nonce'))
@@ -262,14 +270,12 @@ function init_wc_paynet_payment_gateway(): void {
 
 				$this->set_order($order_id);
 
-				$payment_status = $this->get_payment_status();
-
 				if ($action == 'refund') { # XXX why action is refund but make_chargeback being called
 					$this->make_chargeback();
 					$message = __('Payment refunded.', 'wc-payneteasy');
 				}
 				elseif ($action == 'check_status') {
-					$this->change_payment_status($payment_status);
+					$this->change_payment_status($this->get_payment_status());
 					$message = __('Status updated.', 'wc-payneteasy');
 				}
 
@@ -296,7 +302,7 @@ function init_wc_paynet_payment_gateway(): void {
 			return $this->api->return([ 'client_orderid' => $order_id, 'orderid' => $paynet_order_id, 'comment' => 'Order cancel ' ]);
 		}
 
-		private function preparing_items_for_refunds(array $items): array {
+		private function preparing_items_for_refunds(array $items): array { # XXX function not used ever ?
 			$refund_order_item_qty = $_POST['refund_order_item_qty'] ?? [];
 			$refund_line_total = $_POST['refund_line_total'] ?? [];
 
@@ -353,6 +359,13 @@ function init_wc_paynet_payment_gateway(): void {
 			wc_add_notice(__('Payment not paid. Your order has been canceled.', 'wc-payneteasy'), 'error');
 		}
 
+		private function actions_for_chargeback_order(): void {
+			if ($this->order->get_status() !== 'chargeback')
+				$this->order->update_status('chargeback', __('Chargeback of payment.', 'wc-payneteasy'));
+
+			wc_add_notice(__('The payment was charged back.', 'wc-payneteasy'), 'notice');
+		}
+
 		private function actions_for_refunded_order(): void {
 			if ($this->order->get_status() !== 'refunded')
 				$this->order->update_status('refunded', __('Refund of payment.', 'wc-payneteasy'));
@@ -378,7 +391,7 @@ function init_wc_paynet_payment_gateway(): void {
 			$response = $this->api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_order_id ]);
 
 			$three_d_html = $response['html'];
-			return $response['status'];
+			return "{$response['transaction-type']}/{$response['status']}";
 		}
 	}
 }

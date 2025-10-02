@@ -202,7 +202,7 @@ function init_wc_paynet_payment_gateway(): void {
 					throw new \Exception(__('Order ID is empty.', 'wc-payneteasy'));
 
 				$this->set_order($order_id);
-				$this->change_payment_status($payment_status = $this->get_payment_status($three_d_html));
+				$this->change_payment_status( $payment_status = $this->get_payment_status($three_d_html) );
 
 				WC()->cart->empty_cart(); # иначе продолжает слать всё тот же ордер_ид, и гейт отдаёт один и тот же запрос
 
@@ -394,7 +394,8 @@ function init_wc_paynet_payment_gateway(): void {
 
 		private function paynet_order_id(): string {
 			global $wpdb;
-			return $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments WHERE (merchant_order_id='".$this->order->get_id()."')");
+			return $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments WHERE merchant_order_id=".$this->order->get_id()
+				.' ORDER BY id DESC LIMIT 1');
 		}
 	}
 }

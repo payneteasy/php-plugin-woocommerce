@@ -67,14 +67,14 @@ class PaynetApi {
 			throw new PayneteasyException($error_message, [ 'response' => $error_code ]);
 
 		if (empty($response))
-			throw new PayneteasyException('Host response is empty', [ 'response' => $response ]);
+			throw new PayneteasyException('Card processing response is empty', [ 'response' => $response ]);
 
 		parse_str($response, $result);
 		foreach ($result as $k => $v)
 			$result[$k] = rtrim($v);
 
-    if ($result['type'] == 'validation-error')
-      throw new PayneteasyException("Payneteasy reports error: {$result['error-message']}", [ 'response' => $response ]);
+    if (preg_match('/error/', $result['type']))
+      throw new PayneteasyException("Card processing reports error: {$result['error-message']}", [ 'response' => $response ]);
 
 		return $result;
 	}

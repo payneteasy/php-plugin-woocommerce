@@ -10,7 +10,7 @@
 	* Requires PHP: 7.4
 	*
 	* @package Payneteasy
-	* @version 1.0.0
+	* @version 1.0.3
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -66,7 +66,7 @@ function init_wc_paynet_payment_gateway(): void {
 				$s[$k] = in_array($k, ['sandbox', 'require_ssn'])
 					? ($this->get_option($k) == 'yes')
 					: $this->get_option($k);
-				
+
 				if (property_exists($this, $k))
 					$this->$k = $s[$k];
 			}		

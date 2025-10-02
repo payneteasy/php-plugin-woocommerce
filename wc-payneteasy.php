@@ -141,7 +141,7 @@ function init_wc_paynet_payment_gateway(): void {
 				'notify_url' => sprintf($this->notify_url, $order_id) ]);
 
 			global $wpdb;
-			$wpdb->insert($wpdb->prefix.'payneteasy_payments',
+			$wpdb->insert("{$wpdb->prefix}payneteasy_payments",
 				[ 'paynet_order_id' => $response['paynet-order-id'], 'merchant_order_id' => $response['merchant-order-id'] ]);
 
 			return $response;
@@ -225,11 +225,11 @@ function init_wc_paynet_payment_gateway(): void {
 				}
 			}
 			catch (\Exception | PayneteasyException $e)
-				{ wp_die($e->getMessage()); }
+				{ wp_die( $e->getMessage() ); }
 		}
 
 		public function webhook_handler(): void {
-			[ $order_id, $type ] = [ $_GET['client_orderid'], $_GET['type'] ];
+			[ $order_id, $type, $paynet_id ] = [ $_GET['client_orderid'], $_GET['type'], $_GET['orderid'] ];
 
 			try {
 				if (empty($order_id))
@@ -240,12 +240,12 @@ function init_wc_paynet_payment_gateway(): void {
 				if ($this->order->get_status() === $type)
 					die('OK');
 
-				$this->change_payment_status($this->get_payment_status());
+				$this->change_payment_status( $this->get_payment_status($dummy, $paynet_id) );
 
 				exit;
 			}
 			catch (\Exception | PayneteasyException $e)
-				{ wp_die($e->getMessage()); }
+				{ wp_die( $e->getMessage() ); }
 		}
 
 		private function change_payment_status(string $payment_status): void {
@@ -302,10 +302,7 @@ function init_wc_paynet_payment_gateway(): void {
 			$amount = self::parse_amount($amount);
 			$email = $this->order->get_billing_email();
 
-			global $wpdb;
-			$paynet_order_id = $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments WHERE (merchant_order_id=$order_id)");
-
-			return $this->api->return([ 'client_orderid' => $order_id, 'orderid' => $paynet_order_id, 'comment' => 'Order cancel ' ]);
+			return $this->api->return([ 'client_orderid' => $order_id, 'orderid' => $this->paynet_order_id(), 'comment' => 'Order cancel ' ]);
 		}
 
 		private function preparing_items_for_refunds(array $items): array { # XXX function not used ever ?
@@ -388,16 +385,16 @@ function init_wc_paynet_payment_gateway(): void {
 			wc_add_notice(__('The payment was partial refunded.', 'wc-payneteasy'), 'notice');
 		}
 
-		private function get_payment_status(&$three_d_html = null): string {
-			global $wpdb;
-
-			$paynet_order_id = $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments"
-				." WHERE (merchant_order_id = '".$this->order->get_id()."')");
-
-			$response = $this->api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_order_id ]);
+		private function get_payment_status(&$three_d_html = null, $paynet_id = null): string {
+			$response = $this->api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_id ?: $this->paynet_order_id() ]);
 
 			$three_d_html = $response['html'] ?? null;
 			return "{$response['transaction-type']}/{$response['status']}";
+		}
+
+		private function paynet_order_id(): string {
+			global $wpdb;
+			return $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments WHERE (merchant_order_id='".$this->order->get_id()."')");
 		}
 	}
 }

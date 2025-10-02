@@ -73,6 +73,9 @@ class PaynetApi {
 		foreach ($result as $k => $v)
 			$result[$k] = rtrim($v);
 
+    if ($result['type'] == 'validation-error')
+      throw new PayneteasyException("Payneteasy reports error: {$result['error-message']}", [ 'response' => $response ]);
+
 		return $result;
 	}
 }

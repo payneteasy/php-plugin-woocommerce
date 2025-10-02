@@ -69,7 +69,7 @@ function init_wc_paynet_payment_gateway(): void {
 
 				if (property_exists($this, $k))
 					$this->$k = $s[$k];
-			}		
+			}
 
 			$s['is_direct'] = $s['payment_method'] == 'direct';
 			$s['gate'] = $s['sandbox'] ? $s['sandbox_url'] : $s['live_url'];
@@ -96,7 +96,8 @@ function init_wc_paynet_payment_gateway(): void {
 
 				$sale = $this->make_sale();
 
-				$this->order->update_status('pending', __('Payment link generated:', 'wc-payneteasy').$sale['redirect-url'] ?: '');
+				if (isset($sale['redirect-url']))
+					$this->order->update_status('pending', __('Payment link generated:', 'wc-payneteasy').$sale['redirect-url']);
 
 				return $this->api->is_direct()
 					? [ 'result' => 'success', 'redirect' => home_url("?wc-api={$this->id}_return&orderId=$order_id") ]
@@ -110,6 +111,7 @@ function init_wc_paynet_payment_gateway(): void {
 
 		private function make_sale(): array {
 			[ $order_id, $email, $total ] = [ $this->order->get_id(), $this->order->get_billing_email(), $this->order->get_total() ];
+
 			$return_url = home_url("?wc-api={$this->id}_return&orderId=$order_id");
 
 			$response = $this->api->sale([
@@ -150,7 +152,7 @@ function init_wc_paynet_payment_gateway(): void {
 				? "<div class='form-row-$class'><label>{$cell[0]} <span class='required'>*</span></label>"
 					."<input id='{$cell[1]}' name='{$cell[1]}' type='text'"
 					.($cell[2] ? " autocomplete='{$cell[2]}'" : '')
-					." {$cell[3]}></div>"
+					.' '.($cell[3] ?? '').'></div>'
 				: '';
 		}
 
@@ -202,12 +204,13 @@ function init_wc_paynet_payment_gateway(): void {
 				$this->set_order($order_id);
 				$this->change_payment_status($payment_status = $this->get_payment_status($three_d_html));
 
+				WC()->cart->empty_cart(); # иначе продолжает слать всё тот же ордер_ид, и гейт отдаёт один и тот же запрос
+
 				switch ($payment_status) {
 					case 'sale/processing':
 						echo $three_d_html;
 						die();
 					case 'sale/approved':
-						WC()->cart->empty_cart();
 						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was approved. Thank you.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
 						die();
 					case 'sale/error':
@@ -215,6 +218,9 @@ function init_wc_paynet_payment_gateway(): void {
 						die();
 					case 'sale/declined':
 						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was declined. Could you try again.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
+						die();
+					default:
+						echo '<div style="width: 100%; text-align: center"><div><h1>Transaction is declined but something went wrong, please inform your account manager, final status</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
 						die();
 				}
 			}
@@ -390,7 +396,7 @@ function init_wc_paynet_payment_gateway(): void {
 
 			$response = $this->api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_order_id ]);
 
-			$three_d_html = $response['html'];
+			$three_d_html = $response['html'] ?? null;
 			return "{$response['transaction-type']}/{$response['status']}";
 		}
 	}

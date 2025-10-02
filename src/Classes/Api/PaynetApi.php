@@ -73,8 +73,8 @@ class PaynetApi {
 		foreach ($result as $k => $v)
 			$result[$k] = rtrim($v);
 
-    if (preg_match('/error/', $result['type']))
-      throw new PayneteasyException("Card processing reports error: {$result['error-message']}", [ 'response' => $response ]);
+		if ($result['type'] == 'validation-error')
+			throw new PayneteasyException("Card processing reports error: {$result['error-message']}", [ 'response' => $response ]);
 
 		return $result;
 	}

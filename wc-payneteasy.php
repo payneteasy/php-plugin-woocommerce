@@ -2,15 +2,15 @@
 /**
 	* Plugin Name: Payment system PAYNETEASY
 	* Description: Allows you to use Payment system PAYNETEASY with the WooCommerce plugin.
-	* Version: 1.0.0
+	* Version: 1.0.4
 	* Author: Payneteasy
 	* Author URI: https:#payneteasy.com/
 	* Text Domain: wc-payneteasy
 	* Domain Path: /languages/
-	* Requires PHP: 7.4
+	* Requires PHP: 7.4+
 	*
 	* @package Payneteasy
-	* @version 1.0.3
+	* @version 1.0.4
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly

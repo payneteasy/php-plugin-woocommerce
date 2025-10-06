@@ -2,15 +2,15 @@
 /**
 	* Plugin Name: Payment system PAYNETEASY
 	* Description: Allows you to use Payment system PAYNETEASY with the WooCommerce plugin.
-	* Version: 1.0.4
+	* Version: 1.0.0
 	* Author: Payneteasy
 	* Author URI: https:#payneteasy.com/
 	* Text Domain: wc-payneteasy
 	* Domain Path: /languages/
-	* Requires PHP: 7.4+
+	* Requires PHP: 7.4
 	*
 	* @package Payneteasy
-	* @version 1.0.4
+	* @version 1.0.3
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -159,6 +159,14 @@ function init_wc_paynet_payment_gateway(): void {
 		private static function form_row(array $cell1, ?array $cell2): string
 			{ return '<div class="form-row">'.self::form_cell($cell1, 'first').self::form_cell($cell2, 'last').'</div>'; }
 
+		private static function js_luhn_checker(): string {
+			return '<script>function checkLuhn(ccnS) {
+				let sum = 0; const parity = (ccnS.length) % 2;
+				for (let i = 0; i < ccnS.length; i += 1) { let digit = Number(ccnS[i]); if (i % 2 === parity) { digit *= 2;
+				if (digit > 9) { digit -= 9; } } sum += digit; }
+				document.getElementById("place_order").disabled = Number(sum % 10) !== 0; }</script>';
+		}
+
 		# отображение описания платежной системы PAYNET при оформлении заказа
 		public function payment_fields(): void {
 			if (!empty($this->description))
@@ -168,8 +176,9 @@ function init_wc_paynet_payment_gateway(): void {
 			do_action('woocommerce_credit_card_form_start', $this->id);
 
 			echo $this->api->is_direct()
-				? self::form_row(
-						['Card Number', 'credit_card_number', 'cc-number'],
+				? self::js_luhn_checker()
+					.self::form_row(
+						['Card Number', 'credit_card_number', 'cc-number', 'onkeyup="checkLuhn(this.value)"'],
 						['Printed name', 'card_printed_name', 'cc-name', 'placeholder="Printed name"'])
 					.self::form_row(
 						['Expiry month', 'expire_month', 'off', 'minlength="2" maxlength="2" placeholder="MM" style="max-width:50%"'],

@@ -10,7 +10,7 @@
 	* Requires PHP: 7.4
 	*
 	* @package Payneteasy
-	* @version 1.0.3
+	* @version 1.0.4
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -38,7 +38,7 @@ function init_wc_paynet_payment_gateway(): void {
 		function __construct() {
 			$this->id = 'wc_payneteasy';
 			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payment system PAYNETEASY', 'wc-payneteasy');
+			$this->method_title = __('Payment system PAYNETEASY 1.0.4', 'wc-payneteasy');
 			$this->method_description = __('Plugin "PAYNET Payment System" for WooCommerce, which allows you to integrate online payments.', 'wc-payneteasy');
 			$this->has_fields = false;
 
@@ -127,7 +127,7 @@ function init_wc_paynet_payment_gateway(): void {
 				'email' => $email,
 				'ipaddress' => $_SERVER['REMOTE_ADDR'],
 				'cvv2' => "{$_POST['cvv2']}",
-				'ssn' => "{$_POST['ssn']}",
+				'ssn' => $_POST['ssn'] ?? '',
 				'credit_card_number' => "{$_POST['credit_card_number']}",
 				'card_printed_name' => "{$_POST['card_printed_name']}",
 				'expire_month' => "{$_POST['expire_month']}",
@@ -165,6 +165,17 @@ function init_wc_paynet_payment_gateway(): void {
 				for (let i = 0; i < ccnS.length; i += 1) { let digit = Number(ccnS[i]); if (i % 2 === parity) { digit *= 2;
 				if (digit > 9) { digit -= 9; } } sum += digit; }
 				document.getElementById("place_order").disabled = Number(sum % 10) !== 0; }</script>';
+		}
+
+		private static function js_ticker(): string {
+			return '<script>let t_el = document.getElementById("ticker");let t_s = t_el.innerHTML;let t_pos = 0
+				setInterval(ticker, 500)
+				function ticker() {
+					let a = t_s.split("")
+					if (a[t_pos] == " ") t_pos++
+					a[t_pos] = a[t_pos] + "</span>";
+					t_el.innerHTML = "<span style=\'color:#09C\'>" + a.join("")
+					if (++t_pos == t_s.length) t_el.click() }</script>';
 		}
 
 		# отображение описания платежной системы PAYNET при оформлении заказа
@@ -215,21 +226,22 @@ function init_wc_paynet_payment_gateway(): void {
 
 				WC()->cart->empty_cart(); # иначе продолжает слать всё тот же ордер_ид, и гейт отдаёт один и тот же запрос
 
+				$js_ticker = self::js_ticker();
 				switch ($payment_status) {
 					case 'sale/processing':
-						echo $three_d_html;
+						echo $three_d_html ?: '<div style="width: 100%; text-align: center"><div><h1>Your payment is being processed.</h1></div><div><a href="'.home_url("?wc-api={$this->id}_return&orderId=$order_id").'" id="ticker">Check status</a></div></div>'.$js_ticker;
 						die();
 					case 'sale/approved':
-						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was approved. Thank you.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
+						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was approved. Thank you.</h1></div><div><a href="'.get_site_url().'" id="ticker">Return homepage</a></div></div>'.$js_ticker;
 						die();
 					case 'sale/error':
-						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was not completed because of an error. Could you try again.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
+						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was not completed because of an error. Could you try again.</h1></div><div><a href="'.get_site_url().'" id="ticker">Return homepage</a></div></div>'.$js_ticker;
 						die();
 					case 'sale/declined':
-						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was declined. Could you try again.</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
+						echo '<div style="width: 100%; text-align: center"><div><h1>Your payment was declined. Could you try again.</h1></div><div><a href="'.get_site_url().'" id="ticker"">Return homepage</a></div></div>'.$js_ticker;
 						die();
 					default:
-						echo '<div style="width: 100%; text-align: center"><div><h1>Transaction is declined but something went wrong, please inform your account manager, final status</h1></div><div><a href="'.get_site_url().'">Return homepage</a></div></div>';
+						echo '<div style="width: 100%; text-align: center"><div><h1>Transaction is declined but something went wrong, please inform your account manager, final status</h1></div><div><a href="'.get_site_url().'" id="ticker">Return homepage</a></div></div>'.$js_ticker;
 						die();
 				}
 			}

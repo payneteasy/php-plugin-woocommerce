@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce?tab=readme-ov-file#php-plugin-for-woocommerce-wordpress
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.2.0
+	* Version: 1.2.1
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -12,7 +12,7 @@
 	* Requires Plugins: woocommerce/woocommerce
 	*
 	* @package Payneteasy
-	* @version 1.2.0
+	* @version 1.2.1
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -48,7 +48,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		function __construct() {
 			$this->id = 'wc_payneteasy';
 			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payment system Payneteasy v1.2.0', 'wc-payneteasy');
+			$this->method_title = __('Payment system Payneteasy v1.2.1', 'wc-payneteasy');
 			$this->method_description = __('Plugin "Payneteasy Payment System" for WooCommerce, which allows you to integrate online payments.', 'wc-payneteasy');
 			$this->has_fields = false;
 
@@ -78,7 +78,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 		private static function fetch_update_json($failret = null): ?array {
 			if (!($json_str = get_transient(self::GITHUB_REPO))) {
-				if (!empty($json_str = wp_remote_retrieve_body( wp_remote_get(sprintf('https://raw.githubusercontent.com/%s/refs/heads/main/update.json', self::GITHUB_REPO)) )))
+				if (!empty($json_str = wp_remote_retrieve_body( wp_remote_get(sprintf('https://raw.githubusercontent.com/%s/refs/heads/main/.update.json', self::GITHUB_REPO)) )))
 					set_transient(self::GITHUB_REPO, $json_str, HOUR_IN_SECONDS);
 				else
 					return $failret;
@@ -99,17 +99,17 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			if ($info->version != $T->checked[$entry = plugin_basename(__FILE__)]) {
 				$is_pkg_avail = wp_remote_head($pkg_url = sprintf('https://github.com/%s/releases/download/v%s/php-plugin-woocommerce.zip', self::GITHUB_REPO, $info->version));
 
-				if (is_wp_error($is_pkg_avail) || !in_array(wp_remote_retrieve_response_code($is_pkg_avail), [ 200, 302 ]))
-					$pkg_url = null; #throw new Payneteasy\lib\ApiException('New release package is not available yet');
-
 				$T->response[$entry] = (object)[
 					'plugin' => $entry,
-					'package' => $pkg_url,
 					'slug' => $info->slug,
 					'new_version' => $info->version,
 					'requires' => $info->requires,
+					'requires_php' => $info->requires_php,
+					'package' => (is_wp_error($is_pkg_avail) || !in_array(wp_remote_retrieve_response_code($is_pkg_avail), [ 200, 302 ])) ? '' : $pkg_url,
 					'url' => 'https://github.com/payneteasy/php-plugin-woocommerce/blob/main/README.md#php-plugin-for-woocommerce-wordpress' ];
 			}
+			else
+				$T->no_update[$entry] = (object)[ 'slug' => $info->slug, 'plugin' => $entry, 'new_version' => $info->version ];
 
 			return $T;
 		}

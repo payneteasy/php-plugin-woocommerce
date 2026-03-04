@@ -2,7 +2,7 @@
 	"name": "Payneteasy Payment System",
 	"slug": "php-plugin-woocommerce",
 	"author": "<a href='https://payneteasy.com/'>Payneteasy</a>",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"requires": "6.6",
 	"tested": "6.9.1",
 	"requires_php": "7.4",

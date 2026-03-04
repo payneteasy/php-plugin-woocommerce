@@ -1,5 +1,5 @@
 # php plugin for woocommerce wordpress
 
-version 1.2.0.  
+version 1.2.1.  
 tested on Wordpress 6.6, 6.8.1, 6.8.2, 6.8.3, 6.9.1.  
 with wooCommerce (8.7.0, 9.3.4, 9.5.1).

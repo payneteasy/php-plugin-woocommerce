@@ -1,0 +1,13 @@
+{
+	"name": "Payneteasy Payment System",
+	"slug": "php-plugin-woocommerce",
+	"author": "<a href='https://payneteasy.com/'>Payneteasy</a>",
+	"version": "1.2.0",
+	"requires": "6.6",
+	"tested": "6.9.1",
+	"requires_php": "7.4",
+	"last_updated": "2026-03-03",
+	"sections" : {
+		"description" : "Plugin &quot;Payneteasy Payment System&quot; for WooCommerce,<br /> which allows you to integrate online payments."
+	}
+}

@@ -1,16 +1,18 @@
 <?php
 /**
-	* Plugin Name: Payment system PAYNETEASY
-	* Description: Allows you to use Payment system PAYNETEASY with the WooCommerce plugin.
-	* Version: 1.0.4
+	* Plugin Name: Payneteasy payment system
+	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce?tab=readme-ov-file#php-plugin-for-woocommerce-wordpress
+	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
+	* Version: 1.2.0
 	* Author: Payneteasy
-	* Author URI: https:#payneteasy.com/
+	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
 	* Domain Path: /languages/
 	* Requires PHP: 7.4
+	* Requires Plugins: woocommerce/woocommerce
 	*
 	* @package Payneteasy
-	* @version 1.0.4
+	* @version 1.2.0
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -18,32 +20,40 @@ if (!defined('ABSPATH')) exit; # Exit if accessed directly
 require __DIR__.'/vendor/autoload.php';
 require __DIR__.'/hooks.php';
 
-use \Payneteasy\Classes\Api\PaynetApi,
-	\Payneteasy\Classes\Exception\PayneteasyException;
+define('PAYNETEASY_LIB', true);
+include_once('lib'.DIRECTORY_SEPARATOR.'Api.php');
+use Payneteasy\lib;
 
-add_action('plugins_loaded', 'init_wc_paynet_payment_gateway');
+add_action('plugins_loaded', 'hook_init_wc_paynet_payment_gateway');
 
-function init_wc_paynet_payment_gateway(): void {
+function hook_init_wc_paynet_payment_gateway(): void {
 	if (!class_exists('WC_Payment_Gateway') || class_exists('WC_Payneteasy'))
 		return;
 
+	add_filter('plugin_action_links_' .plugin_basename(__FILE__), ['WC_Payneteasy', 'hook_plugin_action_links']);
+	add_filter('pre_set_site_transient_update_plugins', ['WC_Payneteasy', 'hook_plugin_check_version']);
+	add_filter('plugins_api', ['WC_Payneteasy', 'hook_plugin_update_info'], 20, 3);
+
 	class WC_Payneteasy extends WC_Payment_Gateway {
+		private const GITHUB_REPO = 'payneteasy/php-plugin-woocommerce';
+
 		private bool $require_ssn;
 		private string $transaction_end;
 		private string $notify_url;
 
-		private PaynetApi $api;
+		private $Api;
 		private object $order;
+		private static string $admin_error;
 
 		function __construct() {
 			$this->id = 'wc_payneteasy';
 			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payment system PAYNETEASY 1.0.4', 'wc-payneteasy');
-			$this->method_description = __('Plugin "PAYNET Payment System" for WooCommerce, which allows you to integrate online payments.', 'wc-payneteasy');
+			$this->method_title = __('Payment system Payneteasy v1.2.0', 'wc-payneteasy');
+			$this->method_description = __('Plugin "Payneteasy Payment System" for WooCommerce, which allows you to integrate online payments.', 'wc-payneteasy');
 			$this->has_fields = false;
 
 			$s = $this->init_payment_settings();
-			$this->api = new PaynetApi($s['gate'], $s['login'], $s['control_key'], $s['endpoint_id'], $s['is_direct']);
+			$this->Api = new Payneteasy\lib\Api($s['gate'], $s['login'], $s['control_key'], $s['endpoint_id'], $s['is_direct']);
 
 			$this->init_form_fields();
 			$this->init_settings();
@@ -51,14 +61,64 @@ function init_wc_paynet_payment_gateway(): void {
 			add_filter('wc_order_statuses', [$this, 'order_statuses']);
 
 			add_action('woocommerce_update_options_payment_gateways_'.$this->id, [$this, 'process_admin_options']);
-			add_action('woocommerce_api_'.$this->id.'_return', [$this, 'return_handler']);
-			add_action('woocommerce_api_'.$this->id.'_webhook', [$this, 'webhook_handler']);
-			add_action('woocommerce_api_'.$this->id.'_ajax', [$this, 'ajax_handler']);
+			add_action('woocommerce_api_'.$this->id.'_return', [$this, 'hook_return_handler']);
+			add_action('woocommerce_api_'.$this->id.'_webhook', [$this, 'hook_webhook_handler']);
+			add_action('woocommerce_api_'.$this->id.'_ajax', [$this, 'hook_ajax_handler']);
 		}
 
-		public function order_statuses(array $statuses): array {
-			return array_merge($statuses, [ 'wc-chargeback' => _x('Chargeback', 'Order status', 'woocommerce') ]);
+		public static function hook_plugin_action_links(array $links): array
+			{ return array_merge([ 'settings' => '<a href="' .admin_url('admin.php?page=wc-settings&tab=checkout&section=wc_payneteasy') .'">Settings</a>' ], $links); }
+
+		public static function hook_plugin_update_info($rv, $action, $args) {
+			if ('plugin_information' != $action || plugin_basename(__DIR__) != $args->slug)
+				return $rv;
+
+			return (object)self::fetch_update_json($rv);
 		}
+
+		private static function fetch_update_json($failret = null): ?array {
+			if (!($json_str = get_transient(self::GITHUB_REPO))) {
+				if (!empty($json_str = wp_remote_retrieve_body( wp_remote_get(sprintf('https://raw.githubusercontent.com/%s/refs/heads/main/update.json', self::GITHUB_REPO)) )))
+					set_transient(self::GITHUB_REPO, $json_str, HOUR_IN_SECONDS);
+				else
+					return $failret;
+			}
+
+			return json_decode($json_str, true);
+		}
+
+		public static function hook_plugin_check_version(stdClass $T): stdClass {
+			if (empty($T->checked))
+				return $T;
+
+			if (empty($json = self::fetch_update_json()))
+				return $T;
+
+			$info = (object)$json;
+
+			if ($info->version != $T->checked[$entry = plugin_basename(__FILE__)]) {
+				$is_pkg_avail = wp_remote_head($pkg_url = sprintf('https://github.com/%s/releases/download/v%s/php-plugin-woocommerce.zip', self::GITHUB_REPO, $info->version));
+
+				if (is_wp_error($is_pkg_avail) || !in_array(wp_remote_retrieve_response_code($is_pkg_avail), [ 200, 302 ]))
+					$pkg_url = null; #throw new Payneteasy\lib\ApiException('New release package is not available yet');
+
+				$T->response[$entry] = (object)[
+					'plugin' => $entry,
+					'package' => $pkg_url,
+					'slug' => $info->slug,
+					'new_version' => $info->version,
+					'requires' => $info->requires,
+					'url' => 'https://github.com/payneteasy/php-plugin-woocommerce/blob/main/README.md#php-plugin-for-woocommerce-wordpress' ];
+			}
+
+			return $T;
+		}
+
+		public static function hook_report_admin_error(): void
+			{ printf('<div class="notice notice-error"><p>%s</p></div>', self::$admin_error); }
+
+		public function order_statuses(array $statuses): array
+			{ return array_merge($statuses, [ 'wc-chargeback' => _x('Chargeback', 'Order status', 'woocommerce') ]); }
 
 		private function init_payment_settings(): array {
 			foreach (explode(' ', 'endpoint_id login control_key payment_method require_ssn sandbox live_url sandbox_url notify_url transaction_end'
@@ -99,7 +159,7 @@ function init_wc_paynet_payment_gateway(): void {
 				if (isset($sale['redirect-url']))
 					$this->order->update_status('pending', __('Payment link generated:', 'wc-payneteasy').$sale['redirect-url']);
 
-				return $this->api->is_direct()
+				return $this->Api->is_direct()
 					? [ 'result' => 'success', 'redirect' => home_url("?wc-api={$this->id}_return&orderId=$order_id") ]
 					: [ 'result' => 'success', 'redirect' => $sale['redirect-url'] ];
 			}
@@ -114,7 +174,7 @@ function init_wc_paynet_payment_gateway(): void {
 
 			$return_url = home_url("?wc-api={$this->id}_return&orderId=$order_id");
 
-			$response = $this->api->sale([
+			$response = $this->Api->sale([
 				'client_orderid' => $order_id,
 				'order_desc' => "Order # $order_id",
 				'amount' => $total,
@@ -186,7 +246,7 @@ function init_wc_paynet_payment_gateway(): void {
 			echo '<fieldset id="wc-'.esc_attr($this->id).'-cc-form" class="wc-credit-card-form wc-payment-form" style="background:transparent">';
 			do_action('woocommerce_credit_card_form_start', $this->id);
 
-			echo $this->api->is_direct()
+			echo $this->Api->is_direct()
 				? self::js_luhn_checker()
 					.self::form_row(
 						['Card Number', 'credit_card_number', 'cc-number', 'onkeyup="checkLuhn(this.value)"'],
@@ -204,7 +264,7 @@ function init_wc_paynet_payment_gateway(): void {
 		}
 
 		public function validate_fields(): void {
-			if ($this->api->is_direct())
+			if ($this->Api->is_direct())
 				foreach (explode(' ', 'credit_card_number card_printed_name expire_year expire_month cvv2') as $f)
 					if (empty($_POST[$f]))
 						wc_add_notice("$f is required!", 'error');
@@ -214,7 +274,7 @@ function init_wc_paynet_payment_gateway(): void {
 		}
 
 		# обработчик return, вызываемый при переходе на страницу return_url, после попытки оплаты.
-		public function return_handler(): void {
+		public function hook_return_handler(): void {
 			$order_id = $_GET['orderId'] ?? null;
 
 			try {
@@ -249,7 +309,7 @@ function init_wc_paynet_payment_gateway(): void {
 				{ wp_die( $e->getMessage() ); }
 		}
 
-		public function webhook_handler(): void {
+		public function hook_webhook_handler(): void {
 			[ $order_id, $type, $paynet_id ] = [ $_GET['client_orderid'], $_GET['type'], $_GET['orderid'] ];
 
 			try {
@@ -269,20 +329,8 @@ function init_wc_paynet_payment_gateway(): void {
 				{ wp_die( $e->getMessage() ); }
 		}
 
-		private function change_payment_status(string $payment_status): void {
-			$method = 'actions_for_'.([
-					'sale/approved' => 'paid',
-					'sale/processing' => 'hold',
-					'chargeback/approved' => 'chargeback',
-					'reversal/approved' => 'refunded'
-				][$payment_status] ?? 'unpaid')
-				.'_order';
-
-			$this->$method();
-		}
-
 		# проверяем статус платежа, и если он approved, то устанавливаем заказ в CMS как оплаченный.
-		public function ajax_handler(): void {
+		public function hook_ajax_handler(): void {
 			[ $order_id, $action ] = [ $_POST['order_id'], $_POST['action'] ];
 
 			try {
@@ -312,6 +360,18 @@ function init_wc_paynet_payment_gateway(): void {
 				{ wp_send_json([ 'success' => false, 'message' => $e->getMessage() ]); }
 		}
 
+		private function change_payment_status(string $payment_status): void {
+			$method = 'actions_for_'.([
+					'sale/approved' => 'paid',
+					'sale/processing' => 'hold',
+					'chargeback/approved' => 'chargeback',
+					'reversal/approved' => 'refunded'
+				][$payment_status] ?? 'unpaid')
+				.'_order';
+
+			$this->$method();
+		}
+
 		private function make_chargeback(): array { # XXX result not used ever
 			$order_id = $this->order->get_id();
 
@@ -323,7 +383,7 @@ function init_wc_paynet_payment_gateway(): void {
 			$amount = self::parse_amount($amount);
 			$email = $this->order->get_billing_email();
 
-			return $this->api->return([ 'client_orderid' => $order_id, 'orderid' => $this->paynet_order_id(), 'comment' => 'Order cancel ' ]);
+			return $this->Api->return([ 'client_orderid' => $order_id, 'orderid' => $this->paynet_order_id(), 'comment' => 'Order cancel ' ]);
 		}
 
 		private function preparing_items_for_refunds(array $items): array { # XXX function not used ever ?
@@ -403,11 +463,11 @@ function init_wc_paynet_payment_gateway(): void {
 			if ($this->order->get_status() !== $completed_status)
 				$this->order->update_status($completed_status, __('Partial refund of payment.', 'wc-payneteasy'));
 
-			wc_add_notice(__('The payment was partial refunded.', 'wc-payneteasy'), 'notice');
+			wc_add_notice(__('The payment was partially refunded.', 'wc-payneteasy'), 'notice');
 		}
 
 		private function get_payment_status(&$three_d_html = null, $paynet_id = null): string {
-			$response = $this->api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_id ?: $this->paynet_order_id() ]);
+			$response = $this->Api->status([ 'client_orderid' => $this->order->get_id(), 'orderid' => $paynet_id ?: $this->paynet_order_id() ]);
 
 			$three_d_html = $response['html'] ?? null;
 			return "{$response['transaction-type']}/{$response['status']}";

@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce?tab=readme-ov-file#php-plugin-for-woocommerce-wordpress
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.2.1
+	* Version: 1.2.2
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -12,7 +12,7 @@
 	* Requires Plugins: woocommerce/woocommerce
 	*
 	* @package Payneteasy
-	* @version 1.2.1
+	* @version 1.2.2
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -48,8 +48,8 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		function __construct() {
 			$this->id = 'wc_payneteasy';
 			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payment system Payneteasy v1.2.1', 'wc-payneteasy');
-			$this->method_description = __('Plugin "Payneteasy Payment System" for WooCommerce, which allows you to integrate online payments.', 'wc-payneteasy');
+			$this->method_title = __('Payneteasy online card payment system v1.2.2', 'wc-payneteasy');
+			$this->method_description = __('Allows you to use online card payment system by Payneteasy with the WooCommerce.', 'wc-payneteasy');
 			$this->has_fields = false;
 
 			$s = $this->init_payment_settings();

@@ -139,5 +139,3 @@ class Api {
 		return $result;
 	}
 }
-
-?>

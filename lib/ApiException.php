@@ -32,5 +32,3 @@ class ApiException extends \Exception {
 		}
 	}
 }
-
-?>

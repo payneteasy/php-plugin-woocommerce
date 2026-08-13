@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce?tab=readme-ov-file#php-plugin-for-woocommerce-wordpress
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.2.2
+	* Version: 1.4.0
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -12,17 +12,17 @@
 	* Requires Plugins: woocommerce/woocommerce
 	*
 	* @package Payneteasy
-	* @version 1.2.2
+	* @version 1.4.0
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
 
-require __DIR__.'/vendor/autoload.php';
-require __DIR__.'/hooks.php';
+require 'hooks.php';
 
-define('PAYNETEASY_LIB', true);
-include_once('lib'.DIRECTORY_SEPARATOR.'Api.php');
-use Payneteasy\lib;
+include_once 'Payneteasy.lib.php';
+use Payneteasy\PneApi;
+use Payneteasy\PneConfig;
+use Payneteasy\PneException;
 
 add_action('plugins_loaded', 'hook_init_wc_paynet_payment_gateway');
 
@@ -37,33 +37,30 @@ function hook_init_wc_paynet_payment_gateway(): void {
 	class WC_Payneteasy extends WC_Payment_Gateway {
 		private const GITHUB_REPO = 'payneteasy/php-plugin-woocommerce';
 
-		private bool $require_ssn;
-		private string $transaction_end;
-		private string $notify_url;
+		private string $transaction_end, $notify_url;
 
-		private $Api;
+		private $Api, $Cfg;
 		private object $order;
 		private static string $admin_error;
 
 		function __construct() {
 			$this->id = 'wc_payneteasy';
 			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payneteasy online card payment system v1.2.2', 'wc-payneteasy');
+			$this->method_title = __('Payneteasy online card payment system v1.4.0', 'wc-payneteasy');
 			$this->method_description = __('Allows you to use online card payment system by Payneteasy with the WooCommerce.', 'wc-payneteasy');
 			$this->has_fields = false;
 
-			$s = $this->init_payment_settings();
-			$this->Api = new Payneteasy\lib\Api($s['gate'], $s['login'], $s['control_key'], $s['endpoint_id'], $s['is_direct']);
+			$this->Api = new PneApi($this->init_payment_config());
 
 			$this->init_form_fields();
 			$this->init_settings();
 
 			add_filter('wc_order_statuses', [$this, 'order_statuses']);
 
-			add_action('woocommerce_update_options_payment_gateways_'.$this->id, [$this, 'process_admin_options']);
-			add_action('woocommerce_api_'.$this->id.'_return', [$this, 'hook_return_handler']);
-			add_action('woocommerce_api_'.$this->id.'_webhook', [$this, 'hook_webhook_handler']);
-			add_action('woocommerce_api_'.$this->id.'_ajax', [$this, 'hook_ajax_handler']);
+			add_action('woocommerce_update_options_payment_gateways_' .$this->id, [ $this, 'process_admin_options' ]);
+			add_action('woocommerce_api_' .$this->id .'_return', [ $this, 'hook_return_handler' ]);
+			add_action('woocommerce_api_' .$this->id .'_webhook', [ $this, 'hook_webhook_handler' ]);
+			add_action('woocommerce_api_' .$this->id .'_ajax', [ $this, 'hook_ajax_handler' ]);
 		}
 
 		public static function hook_plugin_action_links(array $links): array
@@ -87,19 +84,19 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			return json_decode($json_str, true);
 		}
 
-		public static function hook_plugin_check_version(stdClass $T): stdClass {
-			if (empty($T->checked))
-				return $T;
+		public static function hook_plugin_check_version(stdClass $C): stdClass {
+			if (empty($C->checked))
+				return $C;
 
 			if (empty($json = self::fetch_update_json()))
-				return $T;
+				return $C;
 
 			$info = (object)$json;
 
-			if ($info->version != $T->checked[$entry = plugin_basename(__FILE__)]) {
+			if ($info->version != $C->checked[$entry = plugin_basename(__FILE__)]) {
 				$is_pkg_avail = wp_remote_head($pkg_url = sprintf('https://github.com/%s/releases/download/v%s/php-plugin-woocommerce.zip', self::GITHUB_REPO, $info->version));
 
-				$T->response[$entry] = (object)[
+				$C->response[$entry] = (object)[
 					'plugin' => $entry,
 					'slug' => $info->slug,
 					'new_version' => $info->version,
@@ -109,9 +106,9 @@ function hook_init_wc_paynet_payment_gateway(): void {
 					'url' => 'https://github.com/payneteasy/php-plugin-woocommerce/blob/main/README.md#php-plugin-for-woocommerce-wordpress' ];
 			}
 			else
-				$T->no_update[$entry] = (object)[ 'slug' => $info->slug, 'plugin' => $entry, 'new_version' => $info->version ];
+				$C->no_update[$entry] = (object)[ 'slug' => $info->slug, 'plugin' => $entry, 'new_version' => $info->version ];
 
-			return $T;
+			return $C;
 		}
 
 		public static function hook_report_admin_error(): void
@@ -120,25 +117,24 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		public function order_statuses(array $statuses): array
 			{ return array_merge($statuses, [ 'wc-chargeback' => _x('Chargeback', 'Order status', 'woocommerce') ]); }
 
-		private function init_payment_settings(): array {
-			foreach (explode(' ', 'endpoint_id login control_key payment_method require_ssn sandbox live_url sandbox_url notify_url transaction_end'
-					.' title description enabled') as $k) {
-				$s[$k] = in_array($k, ['sandbox', 'require_ssn'])
-					? ($this->get_option($k) == 'yes')
-					: $this->get_option($k);
+		private function init_payment_config(): PneConfig {
+			foreach (explode(' ', 'transaction_end notify_url title description enabled') as $k)
+				$this->$k = $this->get_option($k);
 
-				if (property_exists($this, $k))
-					$this->$k = $s[$k];
-			}
-
-			$s['is_direct'] = $s['payment_method'] == 'direct';
-			$s['gate'] = $s['sandbox'] ? $s['sandbox_url'] : $s['live_url'];
-
-			return $s;
+			return $this->Cfg = PneConfig::fetchkey_only(function($k){ return (strpos($k, 'IS_') === 0) ? (bool)($this->get_option($k) == 'yes') : $this->get_option($k); });
 		}
 
 		public function init_form_fields(): void
 			{ $this->form_fields = include 'form_fields.php'; }
+
+		public function validate_text_field($k, $v) {
+			if ($error = $this->Cfg->value_error($k, $v)) {
+				WC_Admin_Settings::add_error($error);
+				return $this->settings[$k];
+			}
+			
+			return wc_clean(wp_unslash($v ?? ''));;
+		}
 
 		private function set_order(int $order_id): void {
 			if ($order = wc_get_order($order_id))
@@ -159,11 +155,11 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				if (isset($sale['redirect-url']))
 					$this->order->update_status('pending', __('Payment link generated:', 'wc-payneteasy').$sale['redirect-url']);
 
-				return $this->Api->is_direct()
-					? [ 'result' => 'success', 'redirect' => home_url("?wc-api={$this->id}_return&orderId=$order_id") ]
-					: [ 'result' => 'success', 'redirect' => $sale['redirect-url'] ];
+				return $this->Cfg->IS_FORM
+					? [ 'result' => 'success', 'redirect' => $sale['redirect-url'] ]
+					: [ 'result' => 'success', 'redirect' => home_url("?wc-api={$this->id}_return&orderId=$order_id") ];
 			}
-			catch (\Exception | PayneteasyException $e) {
+			catch (\Exception | PneException $e) {
 				wc_add_notice($e->getMessage(), 'error');
 				return null;
 			}
@@ -186,12 +182,12 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'phone' => $this->order->get_shipping_phone() ?: $this->order->get_billing_phone(),
 				'email' => $email,
 				'ipaddress' => $_SERVER['REMOTE_ADDR'],
-				'cvv2' => "{$_POST['cvv2']}",
+				'cvv2' => $_POST['cvv2'] ?? '',
 				'ssn' => $_POST['ssn'] ?? '',
-				'credit_card_number' => "{$_POST['credit_card_number']}",
-				'card_printed_name' => "{$_POST['card_printed_name']}",
-				'expire_month' => "{$_POST['expire_month']}",
-				'expire_year' => "{$_POST['expire_year']}",
+				'credit_card_number' => $_POST['credit_card_number'] ?? '',
+				'card_printed_name' => $_POST['card_printed_name'] ?? '',
+				'expire_month' => $_POST['expire_month'] ?? '',
+				'expire_year' => $_POST['expire_year'] ?? '',
 				'first_name' => $this->order->get_shipping_first_name() ?: $this->order->get_billing_first_name(),
 				'last_name'  => $this->order->get_shipping_last_name() ?: $this->order->get_billing_last_name(),
 				'redirect_success_url' => $return_url,
@@ -212,7 +208,8 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				? "<div class='form-row-$class'><label>{$cell[0]} <span class='required'>*</span></label>"
 					."<input id='{$cell[1]}' name='{$cell[1]}' type='text'"
 					.($cell[2] ? " autocomplete='{$cell[2]}'" : '')
-					.' '.($cell[3] ?? '').'></div>'
+					.($cell[3] ? " value='{$cell[3]}'" : '')
+					.' '.($cell[4] ?? '').'></div>'
 				: '';
 		}
 
@@ -228,17 +225,14 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		}
 
 		private static function js_ticker(): string {
-			return '<script>let t_el = document.getElementById("ticker");let t_s = t_el.innerHTML;let t_pos = 0
-				setInterval(ticker, 500)
+			return '<script>let t_el = document.getElementById("ticker");let t_s = t_el.innerHTML;let t_pos = 0;setInterval(ticker, 300)
 				function ticker() {
-					let a = t_s.split("")
-					if (a[t_pos] == " ") t_pos++
-					a[t_pos] = a[t_pos] + "</span>";
-					t_el.innerHTML = "<span style=\'color:#09C\'>" + a.join("")
-					if (++t_pos == t_s.length) t_el.click() }</script>';
+					if (++t_pos <= t_s.length) {
+						if (t_s[t_pos] == " ") t_pos++
+						t_el.innerHTML = "<span style=\'color:#09C\'>" + t_s.slice(0, t_pos) + "</span>" + t_s.slice(t_pos)
+					} else { clearInterval(ticker); t_el.click() } }</script>';
 		}
 
-		# отображение описания платежной системы PAYNET при оформлении заказа
 		public function payment_fields(): void {
 			if (!empty($this->description))
 				echo wpautop(wptexturize($this->description));
@@ -246,34 +240,37 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			echo '<fieldset id="wc-'.esc_attr($this->id).'-cc-form" class="wc-credit-card-form wc-payment-form" style="background:transparent">';
 			do_action('woocommerce_credit_card_form_start', $this->id);
 
-			echo $this->Api->is_direct()
-				? self::js_luhn_checker()
+			[ $cc, $cvv, $year, $mon, $name ] = $this->Cfg->IS_LIVE
+				? [ '', '', '', '', '' ]
+				: [ 4444_5555_6666_1111, 123, date('Y')+2, 12, 'Test Name' ];
+
+			echo $this->Cfg->IS_FORM
+				? ($this->Cfg->IS_SSN_REQUIRED ? self::form_cell(['Document Number (CPF)', 'ssn', 'off'], 'wide') : '')
+				: self::js_luhn_checker()
 					.self::form_row(
-						['Card Number', 'credit_card_number', 'cc-number', 'onkeyup="checkLuhn(this.value)"'],
-						['Printed name', 'card_printed_name', 'cc-name', 'placeholder="Printed name"'])
+						['Card Number', 'credit_card_number', 'cc-number', $cc, 'onkeyup="checkLuhn(this.value)"'],
+						['Printed name', 'card_printed_name', 'cc-name', $name, 'placeholder="Printed name"'])
 					.self::form_row(
-						['Expiry month', 'expire_month', 'off', 'minlength="2" maxlength="2" placeholder="MM" style="max-width:50%"'],
-						['Expiry year', 'expire_year', 'off', 'minlength="4" maxlength="4" placeholder="YYYY" style="max-width: 50%"'])
+						['Expiry month', 'expire_month', 'off', $mon, 'minlength="2" maxlength="2" placeholder="MM" style="max-width:50%"'],
+						['Expiry year', 'expire_year', 'off', $year, 'minlength="4" maxlength="4" placeholder="YYYY" style="max-width: 50%"'])
 					.self::form_row(
-						['CVC', 'cvv2', 'off', 'minlength="3" maxlength="4" type="password" style="max-width:50%"'],
-						$this->require_ssn ? ['Document Number (CPF)', 'ssn', 'off'] : null)
-				: ($this->require_ssn ? self::form_cell(['Document Number (CPF)', 'ssn', 'off'], 'wide') : '');
+						['CVC', 'cvv2', 'off', $cvv, 'minlength="3" maxlength="4" type="password" style="max-width:50%"'],
+						$this->Cfg->IS_SSN_REQUIRED ? ['Document Number (CPF)', 'ssn', 'off'] : null);
 
 			do_action('woocommerce_credit_card_form_end', $this->id);
 			echo '<div class="clear"></div></fieldset>';
 		}
 
 		public function validate_fields(): void {
-			if ($this->Api->is_direct())
+			if (!$this->Cfg->IS_FORM)
 				foreach (explode(' ', 'credit_card_number card_printed_name expire_year expire_month cvv2') as $f)
 					if (empty($_POST[$f]))
 						wc_add_notice("$f is required!", 'error');
 
-			if (empty($_POST['ssn']) && $this->require_ssn)
+			if (empty($_POST['ssn']) && $this->Cfg->IS_SSN_REQUIRED)
 				wc_add_notice('CPF is required!', 'error');
 		}
 
-		# обработчик return, вызываемый при переходе на страницу return_url, после попытки оплаты.
 		public function hook_return_handler(): void {
 			$order_id = $_GET['orderId'] ?? null;
 
@@ -284,7 +281,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				$this->set_order($order_id);
 				$this->change_payment_status( $payment_status = $this->get_payment_status($three_d_html) );
 
-				WC()->cart->empty_cart(); # иначе продолжает слать всё тот же ордер_ид, и гейт отдаёт один и тот же запрос
+				WC()->cart->empty_cart(); # otherwise it keeps sending same order_id, so gate keeps returning same answer
 
 				$js_ticker = self::js_ticker();
 				switch ($payment_status) {
@@ -305,7 +302,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 						die();
 				}
 			}
-			catch (\Exception | PayneteasyException $e)
+			catch (\Exception | PneException $e)
 				{ wp_die( $e->getMessage() ); }
 		}
 
@@ -325,11 +322,10 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 				exit;
 			}
-			catch (\Exception | PayneteasyException $e)
+			catch (\Exception | PneException $e)
 				{ wp_die( $e->getMessage() ); }
 		}
 
-		# проверяем статус платежа, и если он approved, то устанавливаем заказ в CMS как оплаченный.
 		public function hook_ajax_handler(): void {
 			[ $order_id, $action ] = [ $_POST['order_id'], $_POST['action'] ];
 
@@ -356,7 +352,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 				wp_send_json([ 'success' => true, 'message' => $message ]);
 			}
-			catch (\Exception | PayneteasyException $e)
+			catch (\Exception | PneException $e)
 				{ wp_send_json([ 'success' => false, 'message' => $e->getMessage() ]); }
 		}
 

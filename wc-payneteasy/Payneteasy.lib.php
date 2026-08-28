@@ -17,7 +17,7 @@ namespace Payneteasy {
 			if ($key == 'cvv2')
 				$value = str_repeat('*', strlen($value));
 			elseif ($key == 'credit_card_number')
-				$value = str_repeat('*', strlen($value)-4) .substr($value, -4);
+				$value = str_repeat('*', strlen($value)-4).substr($value, -4);
 
 			error_log("$prefix'$key' => '$value'");
 		}
@@ -54,17 +54,20 @@ namespace Payneteasy {
 		private bool $changed = false;
 		private $on_save, $on_input_key, $on_uninstall, $cfg = [
 			# [ value, regexp, shown name, is_hidden  ]
-			'LIVE_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/$|', 'Gateway URL' ],
 			'SANDBOX_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/$|', 'Sandbox URL' ],
-			'END_POINT' => [ '', '/^\d+$/', 'End point Id' ],
-			'LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Login' ],
-			'CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Control key' ],
+			'SANDBOX_END_POINT' => [ '', '/^\d+$/', 'Sandbox End point Id' ],
+			'SANDBOX_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
+			'SANDBOX_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Sandbox Control key' ],
+			'LIVE_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/$|', 'Live URL' ],
+			'LIVE_END_POINT' => [ '', '/^\d+$/', 'Live End point Id' ],
+			'LIVE_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
+			'LIVE_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
 			'IS_MULTICURR' => [ '0' ],
 			'IS_LIVE' => [ '0' ],
 			'IS_FORM' => [ '0' ],
 			'IS_SSN_REQUIRED' => [ '0' ],
-			'DEBUG_TRACE' => [ '' ],
-			'DEBUG_FAKE' => [ '' ] ];
+			'DEBUG_TRACE' => [ '0' ],
+			'DEBUG_FAKE' => [ '0' ] ];
 
 		private function __construct() {}
 
@@ -104,7 +107,7 @@ namespace Payneteasy {
 		public function __set(string $k, string $v) {
 			if (null != ($re = ($this->cfg[ $this->allowed_key($k) ][1] ?? null)))
 				if (!preg_match($re, $v))
-					throw new PneConfigException(($this->cfg[$k][2]) .' has invalid format', false);
+					throw new PneConfigException($this->cfg[$k][2].' has invalid format', false);
 
 			if ($this->cfg[$k][0] != (string)$v)
 				[ $this->cfg[$k][0], $this->changed ] = [ (string)$v, true ];
@@ -113,7 +116,7 @@ namespace Payneteasy {
 		# checks for existence or dups
 		private function allowed_key(string $k, bool $check_dup=false): string {
 			if ($check_dup == isset($this->cfg[$k]))
-				throw new PneConfigException(($check_dup ? 'duplicate' : 'inallowed') ." config key '$k'", true);
+				throw new PneConfigException(($check_dup ? 'duplicate' : 'inallowed')." config key '$k'", true);
 
 			return $k;
 		}
@@ -159,7 +162,7 @@ namespace Payneteasy {
 		public function value_error($k, $v): string {
 			if (isset($this->cfg[$k]) && null != ($re = ($this->cfg[$k][1] ?? null)))
 				if (!preg_match($re, $v))
-					return $this->cfg[$k][2] .' has invalid format';
+					return $this->cfg[$k][2].' has invalid format';
 
 			return '';
 		}
@@ -175,20 +178,22 @@ namespace Payneteasy {
 		public const DEBUG_TRACE_REQUESTS = 0b01;
 		public const DEBUG_FAKE_REQUESTS = 0b10;
 
-		private string $gate, $login, $control_key, $endpoint;
+		private string $gate, $login, $control_key, $end_point;
 		private bool $is_form, $is_multicurr;
 		private int $debug_flags;
 
 		public function __construct(PneConfig $Cfg) {
-			[ $this->gate, $this->debug_flags ] = [ $Cfg->IS_LIVE ? $Cfg->LIVE_URL : $Cfg->SANDBOX_URL, self::is_debug_mode() ? ((int)$Cfg->DEBUG_TRACE + (int)$Cfg->DEBUG_FAKE) : 0 ];
-			[ $this->login, $this->control_key, $this->endpoint, $this->is_form, $this->is_multicurr ] = [ $Cfg->LOGIN, $Cfg->CONTROL_KEY, $Cfg->END_POINT, (bool)$Cfg->IS_FORM, (bool)$Cfg->IS_MULTICURR ];
+			[ $this->gate, $this->login, $this->control_key, $this->end_point ]
+				= array_map(fn($k) => $Cfg->{($Cfg->IS_LIVE ? 'LIVE_' : 'SANDBOX_').$k}, ['URL','LOGIN','CONTROL_KEY','END_POINT']);
+			[ $this->is_form, $this->is_multicurr, $this->debug_flags ]
+				= [ (bool)$Cfg->IS_FORM, (bool)$Cfg->IS_MULTICURR, self::is_debug_mode() ? ((int)$Cfg->DEBUG_TRACE + (int)$Cfg->DEBUG_FAKE) : 0 ];
 		}
 
 		public static function is_debug_mode(): bool
 			{ return self::DEBUG_MODE || ($_SERVER['DEBUG_MODE'] ?? false); }
 
 		public static function got_upgrade(string $repo, string $curr_ver, string $stored_ver_date, callable $on_upd): bool {
-			if ($stored_ver_date == $curr_ver .' ' .date('Y-m-d')) # check is daily
+			if ($stored_ver_date == "$curr_ver ".date('Y-m-d')) # check is daily
 				return false;
 
 			[ $stored_ver ] = explode(' ', $stored_ver_date ?: '0');
@@ -216,9 +221,9 @@ namespace Payneteasy {
 			if (!preg_match('/\bv?(?:\d+\.){1,2}\d+$/', ($tag = array_reverse(preg_split('/ +/', (json_decode($response, true)['name'])))[0]), $match))
 				throw new PneException("Version tag is malformed: '$tag'");
 
-			$on_upd($match[0] .' ' .date('Y-m-d'));
+			$on_upd($match[0].' '.date('Y-m-d'));
 
-			return $curr_ver != $match[0];
+			return version_compare($match[0], $curr_ver, '>');
 		}
 
 		public function is_auth_valid(): bool {
@@ -236,13 +241,13 @@ namespace Payneteasy {
 			{ return $this->execute('return', $this->signed($data, null, true)); }
 
 		public function status(array $data): array
-			{ return $this->execute('status', $this->signed($data, $this->login .$data['client_orderid'] .$data['orderid'] .$this->control_key)); }
+			{ return $this->execute('status', $this->signed($data, "{$this->login}{$data['client_orderid']}{$data['orderid']}{$this->control_key}")); }
 
 		private function signed(array $data, string $str=null, bool $add_login=false): array {
 			if (isset($str) || $add_login)
 				$data['login'] = $this->login;
 
-			$data['control'] = sha1($str ?? $this->endpoint .$data['client_orderid'] .($data['amount'] * 100) .$data['email'] .$this->control_key);
+			$data['control'] = sha1($str ?? "{$this->end_point}{$data['client_orderid']}".($data['amount'] * 100)."{$data['email']}{$this->control_key}");
 			return $data;
 		}
 
@@ -264,7 +269,7 @@ namespace Payneteasy {
 				return array_merge($fake[$action], [ 'merchant-order-id' => $data['client_orderid'], 'paynet-order-id' => time(), 'serial-number' => '00000000-0000-0000-0000-000000000000' ]);
 			}
 
-			$Curl = curl_init($this->gate .self::URL .$action .($this->is_multicurr ? '/group/' : '/') .$this->endpoint);
+			$Curl = curl_init($this->gate.self::URL.$action.($this->is_multicurr ? '/group/' : '/').$this->end_point);
 			curl_setopt_array($Curl, [
 				CURLOPT_HEADER					=> 0,
 				CURLOPT_USERAGENT				=> self::USERAGENT,

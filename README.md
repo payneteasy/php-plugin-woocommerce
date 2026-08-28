@@ -1,6 +1,6 @@
 # Plugin for WordPress with WooCommerce
 
-tested on WordPress 7.0, 6.9.1, 6.8.3, 6.6.  
+tested on WordPress 7.0.4, 6.9.1, 6.8.3, 6.6.  
 with WooCommerce 9.5.1, 9.3.4, 8.7.0, 7.1.2.
 
 # Installation and configuration

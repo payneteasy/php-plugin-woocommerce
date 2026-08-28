@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce?tab=readme-ov-file#php-plugin-for-woocommerce-wordpress
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.4.0
+	* Version: 1.5.0
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -11,8 +11,7 @@
 	* Requires PHP: 7.4
 	* Requires Plugins: woocommerce/woocommerce
 	*
-	* @package Payneteasy
-	* @version 1.4.0
+	* @package Payneteasy_WooCommerce
 	*/
 
 if (!defined('ABSPATH')) exit; # Exit if accessed directly
@@ -26,11 +25,14 @@ use Payneteasy\PneException;
 
 add_action('plugins_loaded', 'hook_init_wc_paynet_payment_gateway');
 
+define('PNE_PLUGIN_URL', plugin_dir_url(__FILE__));
+define('PNE_PLUGIN_VERSION', get_file_data(__FILE__, ['version' => 'Version'])['version']);
+
 function hook_init_wc_paynet_payment_gateway(): void {
 	if (!class_exists('WC_Payment_Gateway') || class_exists('WC_Payneteasy'))
 		return;
 
-	add_filter('plugin_action_links_' .plugin_basename(__FILE__), ['WC_Payneteasy', 'hook_plugin_action_links']);
+	add_filter('plugin_action_links_'.plugin_basename(__FILE__), ['WC_Payneteasy', 'hook_plugin_action_links']);
 	add_filter('pre_set_site_transient_update_plugins', ['WC_Payneteasy', 'hook_plugin_check_version']);
 	add_filter('plugins_api', ['WC_Payneteasy', 'hook_plugin_update_info'], 20, 3);
 
@@ -45,26 +47,26 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 		function __construct() {
 			$this->id = 'wc_payneteasy';
-			$this->icon = apply_filters('woocommerce_payneteasy_icon', plugin_dir_url(__FILE__).'payneteasy.png');
-			$this->method_title = __('Payneteasy online card payment system v1.4.0', 'wc-payneteasy');
+			$this->icon = apply_filters('woocommerce_payneteasy_icon', PNE_PLUGIN_URL.'payneteasy.png');
+			$this->method_title = __('Payneteasy online card payment system v'.PNE_PLUGIN_VERSION, 'wc-payneteasy');
 			$this->method_description = __('Allows you to use online card payment system by Payneteasy with the WooCommerce.', 'wc-payneteasy');
 			$this->has_fields = false;
 
-			$this->Api = new PneApi($this->init_payment_config());
+			$this->Api = new PneApi($this->init_config());
 
 			$this->init_form_fields();
 			$this->init_settings();
 
 			add_filter('wc_order_statuses', [$this, 'order_statuses']);
 
-			add_action('woocommerce_update_options_payment_gateways_' .$this->id, [ $this, 'process_admin_options' ]);
-			add_action('woocommerce_api_' .$this->id .'_return', [ $this, 'hook_return_handler' ]);
-			add_action('woocommerce_api_' .$this->id .'_webhook', [ $this, 'hook_webhook_handler' ]);
-			add_action('woocommerce_api_' .$this->id .'_ajax', [ $this, 'hook_ajax_handler' ]);
+			add_action("woocommerce_update_options_payment_gateways_{$this->id}", [ $this, 'process_admin_options' ]);
+			add_action("woocommerce_api_{$this->id}_return", [ $this, 'hook_return_handler' ]);
+			add_action("woocommerce_api_{$this->id}_webhook", [ $this, 'hook_webhook_handler' ]);
+			add_action("woocommerce_api_{$this->id}_ajax", [ $this, 'hook_ajax_handler' ]);
 		}
 
 		public static function hook_plugin_action_links(array $links): array
-			{ return array_merge([ 'settings' => '<a href="' .admin_url('admin.php?page=wc-settings&tab=checkout&section=wc_payneteasy') .'">Settings</a>' ], $links); }
+			{ return array_merge([ 'settings' => '<a href="'.admin_url('admin.php?page=wc-settings&tab=checkout&section=wc_payneteasy').'">Settings</a>' ], $links); }
 
 		public static function hook_plugin_update_info($rv, $action, $args) {
 			if ('plugin_information' != $action || plugin_basename(__DIR__) != $args->slug)
@@ -91,22 +93,22 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			if (empty($json = self::fetch_update_json()))
 				return $C;
 
-			$info = (object)$json;
+			$Remote = (object)$json;
 
-			if ($info->version != $C->checked[$entry = plugin_basename(__FILE__)]) {
-				$is_pkg_avail = wp_remote_head($pkg_url = sprintf('https://github.com/%s/releases/download/v%s/php-plugin-woocommerce.zip', self::GITHUB_REPO, $info->version));
+			if (version_compare($Remote->version, $C->checked[$entry = plugin_basename(__FILE__)], '>')) {
+				$is_pkg_avail = wp_remote_head($pkg_url = sprintf('https://github.com/%s/releases/download/v%s/php-plugin-woocommerce.zip', self::GITHUB_REPO, $Remote->version));
 
 				$C->response[$entry] = (object)[
 					'plugin' => $entry,
-					'slug' => $info->slug,
-					'new_version' => $info->version,
-					'requires' => $info->requires,
-					'requires_php' => $info->requires_php,
+					'slug' => $Remote->slug,
+					'new_version' => $Remote->version,
+					'requires' => $Remote->requires,
+					'requires_php' => $Remote->requires_php,
 					'package' => (is_wp_error($is_pkg_avail) || !in_array(wp_remote_retrieve_response_code($is_pkg_avail), [ 200, 302 ])) ? '' : $pkg_url,
 					'url' => 'https://github.com/payneteasy/php-plugin-woocommerce/blob/main/README.md#php-plugin-for-woocommerce-wordpress' ];
 			}
 			else
-				$C->no_update[$entry] = (object)[ 'slug' => $info->slug, 'plugin' => $entry, 'new_version' => $info->version ];
+				$C->no_update[$entry] = (object)[ 'slug' => $Remote->slug, 'plugin' => $entry, 'new_version' => $Remote->version ];
 
 			return $C;
 		}
@@ -117,15 +119,18 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		public function order_statuses(array $statuses): array
 			{ return array_merge($statuses, [ 'wc-chargeback' => _x('Chargeback', 'Order status', 'woocommerce') ]); }
 
-		private function init_payment_config(): PneConfig {
+		private function init_config(): PneConfig {
 			foreach (explode(' ', 'transaction_end notify_url title description enabled') as $k)
 				$this->$k = $this->get_option($k);
 
 			return $this->Cfg = PneConfig::fetchkey_only(function($k){ return (strpos($k, 'IS_') === 0) ? (bool)($this->get_option($k) == 'yes') : $this->get_option($k); });
 		}
 
-		public function init_form_fields(): void
-			{ $this->form_fields = include 'form_fields.php'; }
+		public function init_form_fields(): void {
+			$hidden[$this->Cfg->IS_LIVE ? 'SANDBOX' : 'LIVE'] = $hidden[$this->Cfg->IS_MULTICURR ? 'SINGLE' : 'MULTI'] = ' style="display:none"';
+			$endpointid_label = $this->Cfg->IS_MULTICURR ? 'Endpoint Group ID' : 'Endpoint ID';
+			$this->form_fields = include 'form_fields.php';
+		}
 
 		public function validate_text_field($k, $v) {
 			if ($error = $this->Cfg->value_error($k, $v)) {
@@ -225,12 +230,11 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		}
 
 		private static function js_ticker(): string {
-			return '<script>let t_el = document.getElementById("ticker");let t_s = t_el.innerHTML;let t_pos = 0;setInterval(ticker, 300)
-				function ticker() {
+			return '<script>let t_el = document.getElementById("ticker");let t_s=t_el.innerHTML,t_pos=0,t_iv=setInterval(() => {
 					if (++t_pos <= t_s.length) {
 						if (t_s[t_pos] == " ") t_pos++
 						t_el.innerHTML = "<span style=\'color:#09C\'>" + t_s.slice(0, t_pos) + "</span>" + t_s.slice(t_pos)
-					} else { clearInterval(ticker); t_el.click() } }</script>';
+					} else { clearInterval(t_iv); t_el.click() } }, 300)</script>';
 		}
 
 		public function payment_fields(): void {

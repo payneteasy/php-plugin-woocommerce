@@ -1,11 +1,6 @@
 <?php
-/**
-	* Функция add_payneteasy_gateway
-	*
-	* Добавляет платёжный метод "WC_Payneteasy" в список доступных платёжных методов WooCommerce.
-	*
-	* @param array $methods - Список доступных платёжных методов
-	* @return array - Модифицированный список платёжных методов с добавлением WC_Payneteasy */
+
+add_filter('woocommerce_payment_gateways', 'add_payneteasy_gateway');
 function add_payneteasy_gateway(array $methods): array {
 	$methods[] = 'WC_Payneteasy';
 	global $wpdb;
@@ -19,52 +14,24 @@ function add_payneteasy_gateway(array $methods): array {
 		PRIMARY KEY  (id)
 	) $charset_collate";
 
-	require_once( ABSPATH . 'wp-admin/includes/upgrade.php' );
-	dbDelta( $sql );
+	require_once(ABSPATH.'wp-admin/includes/upgrade.php');
+	dbDelta($sql);
 
 	return $methods;
 }
 
-add_filter('woocommerce_payment_gateways', 'add_payneteasy_gateway');
-
-/**
-	* Функция load_payneteasy_textdomain
-	*
-	* Загружает локализацию (текстовый перевод) для плагина WC_Payneteasy. */
+add_action('plugins_loaded', 'load_payneteasy_textdomain');
 function load_payneteasy_textdomain(): void
 	{ load_plugin_textdomain('wc-payneteasy', false, dirname(plugin_basename(__FILE__)) . '/languages'); }
 
-add_action('plugins_loaded', 'load_payneteasy_textdomain');
-
-/**
-	* Функция get_payneteasy_field_options
-	*
-	* Возвращает список доступных опций для полей настроек WC_Payneteasy на основе идентификатора поля.
-	*
-	* @param string $field_id - Идентификатор поля настроек
-	* @return array - Список опций для поля */
-function get_payneteasy_field_options($field_id): array {
-	$options = [ '-' => __('Select an option', 'wc-payneteasy') ];
-	# Определяет опции для конкретного поля
-	switch ($field_id) {
-		case 'payneteasy_payment_method':
-			$options = array_merge($options, [ 'form' => __('Form', 'wc-payneteasy'), 'direct' => __('Direct', 'wc-payneteasy') ]);
-			break;
-	}
-
-	return $options;
-}
-
-/**
-* Функция adding_payneteasy_button_to_orders_page
-	*
-	* Добавляет скрипты и стили к странице заказов и настройкам WC_Payneteasy в административной части.
-	*
-	* @param string $hook - Идентификатор страницы в административной части WordPress */
-function adding_payneteasy_button_to_orders_page($hook): void {
-	# Проверяет наличие настроек WC_Payneteasy и условия для добавления скриптов и стилей
-	$payneteasy_settings = get_option('woocommerce_wc_payneteasy_settings');
+add_action('admin_enqueue_scripts', 'payneteasy_admin_settings_hook');
+function payneteasy_admin_settings_hook($hook): void {
 	global $post;
+
+	if ('woocommerce_page_wc-settings' == $hook) {
+		wp_enqueue_script('payneteasy_admin_settings', PNE_PLUGIN_URL .'assets/js/admin_settings.js', ['jquery'], PNE_PLUGIN_VERSION, true);
+		wp_localize_script('payneteasy_admin_settings', 'pneAdminSettings', [ 'field_prefix' => 'woocommerce_wc_payneteasy_' ]);
+	}
 
 	if (($hook == 'post-new.php' || $hook == 'post.php') && !empty($post) && $post->post_type === 'shop_order') {
 		$order_id = $post->ID;
@@ -84,8 +51,7 @@ function adding_payneteasy_button_to_orders_page($hook): void {
 	}
 }
 
-add_action('admin_enqueue_scripts', 'adding_payneteasy_button_to_orders_page');
-
+add_action('woocommerce_register_shop_order_post_statuses', 'register_chargeback_status');
 function register_chargeback_status(array $statuses): array {
 	return array_merge($statuses, [
 		'wc-chargeback' => [
@@ -97,4 +63,3 @@ function register_chargeback_status(array $statuses): array {
 			'label_count' => _n_noop('Chargeback <span class="count">(%s)</span>', 'Chargeback <span class="count">(%s)</span>', 'payneteasy') ] ]);
 }
 
-add_action('woocommerce_register_shop_order_post_statuses', 'register_chargeback_status');

@@ -54,11 +54,11 @@ namespace Payneteasy {
 		private bool $changed = false;
 		private $on_save, $on_input_key, $on_uninstall, $cfg = [
 			# [ value, regexp, shown name, is_hidden  ]
-			'SANDBOX_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/$|', 'Sandbox URL' ],
+			'SANDBOX_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
 			'SANDBOX_END_POINT' => [ '', '/^\d+$/', 'Sandbox End point Id' ],
 			'SANDBOX_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
 			'SANDBOX_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Sandbox Control key' ],
-			'LIVE_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/$|', 'Live URL' ],
+			'LIVE_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
 			'LIVE_END_POINT' => [ '', '/^\d+$/', 'Live End point Id' ],
 			'LIVE_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
 			'LIVE_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
@@ -169,7 +169,7 @@ namespace Payneteasy {
 	}
 
 	class PneApi {
-		private const URL = 'paynet/api/v2/';
+		private const URL_SUFFIX = '/api/v2';
 		private const USERAGENT = 'Payneteasy-Client/2.0';
 
 		private const DEBUG_MODE = false; # this is used to show admin controls (or do SetEnv DEBUG_MODE 1) in devel environment
@@ -269,7 +269,7 @@ namespace Payneteasy {
 				return array_merge($fake[$action], [ 'merchant-order-id' => $data['client_orderid'], 'paynet-order-id' => time(), 'serial-number' => '00000000-0000-0000-0000-000000000000' ]);
 			}
 
-			$Curl = curl_init($this->gate.self::URL.$action.($this->is_multicurr ? '/group/' : '/').$this->end_point);
+			$Curl = curl_init($this->gate.self::URL_SUFFIX."/$action".($this->is_multicurr ? '/group/' : '/').$this->end_point);
 			curl_setopt_array($Curl, [
 				CURLOPT_HEADER					=> 0,
 				CURLOPT_USERAGENT				=> self::USERAGENT,

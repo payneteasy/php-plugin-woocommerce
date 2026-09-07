@@ -180,11 +180,12 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'order_desc' => "Order # $order_id",
 				'amount' => $total,
 				'currency' => $this->order->get_currency(),
-				'address1' => $this->order->get_shipping_address_1() ?: $this->order->get_billing_address_1(),
-				'city' => $this->order->get_shipping_city() ?: $this->order->get_billing_city(),
-				'zip_code' => $this->order->get_shipping_postcode() ?: $this->order->get_billing_postcode(),
-				'country' => $this->order->get_shipping_country() ?: $this->order->get_billing_country(),
-				'phone' => $this->order->get_shipping_phone() ?: $this->order->get_billing_phone(),
+				'address1' => $this->order->get_billing_address_1(),
+				'city' => $this->order->get_billing_city(),
+				'zip_code' => $this->order->get_billing_postcode(),
+				'country' => $this->order->get_billing_country(),
+				'state' => $this->order->get_billing_state() ?? '',
+				'phone' => $this->order->get_billing_phone(),
 				'email' => $email,
 				'ipaddress' => $_SERVER['REMOTE_ADDR'],
 				'cvv2' => $_POST['cvv2'] ?? '',
@@ -285,7 +286,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				$this->set_order($order_id);
 				$this->change_payment_status( $payment_status = $this->get_payment_status($three_d_html) );
 
-				WC()->cart->empty_cart(); # otherwise it keeps sending same order_id, so gate keeps returning same answer
+				WC()->cart->empty_cart();
 
 				$js_ticker = self::js_ticker();
 				switch ($payment_status) {

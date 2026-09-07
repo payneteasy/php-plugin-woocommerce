@@ -36,7 +36,7 @@ return [
 	'SANDBOX_URL' => [
 		'title' => __('Gateway url (SANDBOX)', 'wc-payneteasy'),
 		'type' => 'text',
-		'description' => __("Sandbox API URL, e.g. https://sandbox.payneteasy.com/", 'wc-payneteasy'),
+		'description' => __("Sandbox API URL, e.g. https://sandbox.payneteasy.com/paynet", 'wc-payneteasy'),
 		'placeholder' => __('Enter sandbox url.', 'wc-payneteasy') ],
 	'SANDBOX_END_POINT' => [
 		'title' => sprintf('<span class="pne_is_multi pne_endpointid_label">%s</span> <span style="color:red">*<span/>', __($endpointid_label, 'wc-payneteasy')),
@@ -59,7 +59,7 @@ return [
 	'LIVE_URL' => [
 		'title' => __('Gateway url (LIVE)', 'wc-payneteasy'),
 		'type' => 'text',
-		'description' => __("Merchant's API URL, e.g. https://gate.payneteasy.com/", 'wc-payneteasy'),
+		'description' => __("Merchant's API URL, e.g. https://gate.payneteasy.com/paynet", 'wc-payneteasy'),
 		'placeholder' => __('Enter live url.', 'wc-payneteasy') ],
 	'LIVE_END_POINT' => [
 		'title' => sprintf('<span class="pne_is_multi pne_endpointid_label">%s</span> <span style="color:red">*<span/>', __($endpointid_label, 'wc-payneteasy')),

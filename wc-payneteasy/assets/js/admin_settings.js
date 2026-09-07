@@ -20,7 +20,7 @@
 		var $fields = $(fields), $rows = { LIVE:$(rows.LIVE), SANDBOX:$(rows.SANDBOX) }
 	
 		var checks = {
-			URL: /^https?:\/\/(?:\w+(?:-\w+)*\.)+\w+\/$/,
+			URL: /^https?:\/\/(?:\w+(?:-\w+)*\.)+\w+\/\w+$/,
 			END_POINT: /^\d+$/,
 			LOGIN: /^[a-z][\w-]*\w$/i,
 			CONTROL_KEY: /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i }

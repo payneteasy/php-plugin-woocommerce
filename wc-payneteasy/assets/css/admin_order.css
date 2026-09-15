@@ -1,0 +1,9 @@
+.order-status.status-authorized { background:#E2E8F5; color:#3D5A80 }
+.order-status.status-void { background:#FBE4E6; color:#A13B46 }
+.order-status.status-refunded { background:#F5C2C7; color:#842029 }
+.order-status.status-chargeback { background:#DC3545; color:#FFF }
+
+.pne-check-status-wrap { display:inline-block }
+.pne-transaction-id { display:block; text-align:center }
+
+.notice-info { background-color:#DDF }

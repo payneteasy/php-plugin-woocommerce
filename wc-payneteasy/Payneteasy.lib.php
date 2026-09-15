@@ -8,34 +8,47 @@
 declare(strict_types=1);
 
 namespace Payneteasy {
-	function trace(mixed $arg, string $prefix=''): void {
+	function trace($arg, string $prefix='', array &$json=null): void {
 		if (is_object($arg))
 			$arg = get_object_vars($arg);
+
+		if (!count($arg))
+			return;
 
 		ksort($arg);
 		foreach ($arg as $key => $value) {
 			if ($key == 'cvv2')
-				$value = str_repeat('*', strlen($value));
+				$arg[$key] = str_repeat('*', strlen($value));
 			elseif ($key == 'credit_card_number')
-				$value = str_repeat('*', strlen($value)-4).substr($value, -4);
+				$arg[$key] = (strlen($value) > 4) ? str_repeat('*', strlen($value)-4).substr($value, -4) : $value;
 
-			error_log("$prefix'$key' => '$value'");
+			error_log("$prefix'$key' => '{$arg[$key]}'");
 		}
+
+		if (isset($json))
+			$json[] = $arg;
 	}
 
 	class PneException extends \Exception {
-		public function __construct(string $message, mixed $a1=null, mixed $a2=null) {
-			parent::__construct($message, 0, null);
+		public function __construct(string $message, $a1=null, $a2=null, $hdr=null, int $code=0) {
+			parent::__construct($message, $code, null);
 
-			error_log($this->message.' in '.$this->file.':'.$this->line);
+			error_log("{$this->message} in {$this->file}:{$this->line}");
+
+			$json = [$this->message];
 
 			if (isset($a1)) {
-				trace($a1, isset($a2) ? ' --> ' : ' -- ');
+				if (isset($hdr))
+					trace($hdr, ' -- ', $json);
+
+				trace($a1, isset($a2) ? ' --> ' : ' -- ', $json);
 
 				if (isset($a2)) {
-					trace($a2, ' <-- ');
+					trace($a2, ' <-- ', $json);
 				}
 			}
+
+			PneApi::call_logger($json);
 		}
 	}
 
@@ -44,7 +57,7 @@ namespace Payneteasy {
 			parent::__construct($message, 0, null);
 
 			if ($verbose)
-				error_log($this->message.' in '.$this->file.':'.$this->line);
+				error_log("{$this->message} in {$this->file}:{$this->line}");
 		}
 	}
 
@@ -53,21 +66,23 @@ namespace Payneteasy {
 
 		private bool $changed = false;
 		private $on_save, $on_input_key, $on_uninstall, $cfg = [
-			# [ value, regexp, shown name, is_hidden  ]
-			'SANDBOX_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
-			'SANDBOX_END_POINT' => [ '', '/^\d+$/', 'Sandbox End point Id' ],
-			'SANDBOX_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
+			# [ value, regexp, shown name for exceptions, is_hidden  ]
+			'IS_LIVE'             => [ '0' ], # must be 1st for proper regex checks later
+			'SANDBOX_URL'         => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
+			'SANDBOX_END_POINT'   => [ '', '/^\d+$/', 'Sandbox Endpoint ID' ],
+			'SANDBOX_LOGIN'       => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
 			'SANDBOX_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Sandbox Control key' ],
-			'LIVE_URL' => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
-			'LIVE_END_POINT' => [ '', '/^\d+$/', 'Live End point Id' ],
-			'LIVE_LOGIN' => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
-			'LIVE_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
-			'IS_MULTICURR' => [ '0' ],
-			'IS_LIVE' => [ '0' ],
-			'IS_FORM' => [ '0' ],
-			'IS_SSN_REQUIRED' => [ '0' ],
-			'DEBUG_TRACE' => [ '0' ],
-			'DEBUG_FAKE' => [ '0' ] ];
+			'LIVE_URL'            => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
+			'LIVE_END_POINT'      => [ '', '/^\d+$/', 'Live Endpoint ID' ],
+			'LIVE_LOGIN'          => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
+			'LIVE_CONTROL_KEY'    => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
+			'IS_MULTICURR'        => [ '0' ],
+			'IS_FORM'             => [ '0' ],
+			'IS_PREAUTH'          => [ '0' ],
+			'IS_CAPTURE_MANUAL'   => [ '0' ],
+			'IS_SSN_REQUIRED'     => [ '0' ],
+			'IS_DEBUG_TRACE'      => [ '0' ],
+			'IS_DEBUG_FAKE'       => [ '0' ] ];
 
 		private function __construct() {}
 
@@ -106,7 +121,7 @@ namespace Payneteasy {
 
 		public function __set(string $k, string $v) {
 			if (null != ($re = ($this->cfg[ $this->allowed_key($k) ][1] ?? null)))
-				if (!preg_match($re, $v))
+				if ($this->is_regex_check_failed($k, $v, $re))
 					throw new PneConfigException($this->cfg[$k][2].' has invalid format', false);
 
 			if ($this->cfg[$k][0] != (string)$v)
@@ -120,6 +135,9 @@ namespace Payneteasy {
 
 			return $k;
 		}
+
+		private function is_regex_check_failed(string $k, string $v, string $re): bool
+			{ return strstr($k, '_', true) == ($this->IS_LIVE ? 'LIVE' : 'SANDBOX') && !preg_match($re, $v); }
 
 		public function save(): bool {
 			if (!$this->changed)
@@ -161,36 +179,65 @@ namespace Payneteasy {
 
 		public function value_error($k, $v): string {
 			if (isset($this->cfg[$k]) && null != ($re = ($this->cfg[$k][1] ?? null)))
-				if (!preg_match($re, $v))
+				if ($this->is_regex_check_failed($k, $v, $re))
 					return $this->cfg[$k][2].' has invalid format';
 
 			return '';
 		}
 	}
 
+	class PneLogger {
+		# cuz no enums
+		public const AS_ERROR = true;
+		public const AS_INFO = false;
+
+		private $on_log_error, $on_log_info;
+
+		private function __construct() {}
+
+		public static function as_plaintext(callable $on_log_error, callable $on_log_info=null): PneLogger {
+			$new = new self();
+
+			[ $new->on_log_error, $new->on_log_info ] = [ $on_log_error, $on_log_info ?? $on_log_error ];
+
+			return $new;
+		}
+
+		public function send_log_entry($arg, bool $as_error): void
+			{ ($as_error ? $this->on_log_error : $this->on_log_info)($arg); }
+	}
+
 	class PneApi {
-		private const URL_SUFFIX = '/api/v2';
-		private const USERAGENT = 'Payneteasy-Client/2.0';
-
-		private const DEBUG_MODE = false; # this is used to show admin controls (or do SetEnv DEBUG_MODE 1) in devel environment
-
 		# these are debug mode flags in admin section
 		public const DEBUG_TRACE_REQUESTS = 0b01;
 		public const DEBUG_FAKE_REQUESTS = 0b10;
 
-		private string $gate, $login, $control_key, $end_point;
-		private bool $is_form, $is_multicurr;
-		private int $debug_flags;
+		private const USERAGENT = 'Payneteasy-Client/2.0';
+		private const DEBUG_MODE = false; # this is used to show admin controls (or do SetEnv DEBUG_MODE 1) in devel environment
 
-		public function __construct(PneConfig $Cfg) {
+		private string $gate, $login, $control_key, $end_point;
+		private bool $is_form, $is_multicurr, $is_preauth;
+		private int $debug_flags;
+		private static ?PneLogger $Logger;
+
+		public function __construct(PneConfig $Cfg, PneLogger $Logger=null) {
 			[ $this->gate, $this->login, $this->control_key, $this->end_point ]
 				= array_map(fn($k) => $Cfg->{($Cfg->IS_LIVE ? 'LIVE_' : 'SANDBOX_').$k}, ['URL','LOGIN','CONTROL_KEY','END_POINT']);
-			[ $this->is_form, $this->is_multicurr, $this->debug_flags ]
-				= [ (bool)$Cfg->IS_FORM, (bool)$Cfg->IS_MULTICURR, self::is_debug_mode() ? ((int)$Cfg->DEBUG_TRACE + (int)$Cfg->DEBUG_FAKE) : 0 ];
+
+			[ $this->is_form, $this->is_multicurr, $this->is_preauth, $this->debug_flags ]
+				= [ (bool)$Cfg->IS_FORM, (bool)$Cfg->IS_MULTICURR, (bool)$Cfg->IS_PREAUTH,
+					self::is_debug_mode() ? ((int)$Cfg->IS_DEBUG_TRACE + (int)$Cfg->IS_DEBUG_FAKE * self::DEBUG_FAKE_REQUESTS) : 0 ];
+
+			self::$Logger = $Logger;
 		}
 
 		public static function is_debug_mode(): bool
 			{ return self::DEBUG_MODE || ($_SERVER['DEBUG_MODE'] ?? false); }
+
+		public static function call_logger($arg, bool $as_error=true): void {
+			if (isset(self::$Logger) && !empty($arg))
+				self::$Logger->send_log_entry(is_array($arg) ? json_encode($arg, JSON_INVALID_UTF8_SUBSTITUTE) : $arg, $as_error);
+		}
 
 		public static function got_upgrade(string $repo, string $curr_ver, string $stored_ver_date, callable $on_upd): bool {
 			if ($stored_ver_date == "$curr_ver ".date('Y-m-d')) # check is daily
@@ -226,57 +273,123 @@ namespace Payneteasy {
 			return version_compare($match[0], $curr_ver, '>');
 		}
 
-		public function is_auth_valid(): bool {
-			$test = $this->status([ 'client_orderid' => 1, 'orderid' => 1 ]);
-			return $test['status'] == 'approved';
-		}
+		public function is_auth_valid(): bool
+			{ return 'approved' == ($this->status([ 'client_orderid' => 1, 'orderid' => 1 ]))['status']; }
 
 		public function is_form(): bool
 			{ return (bool)$this->is_form; }
 
-		public function sale(array $data): array
-			{ return $this->execute($this->is_form ? 'sale-form' : 'sale', $this->signed($data)); }
+		public function log_error($arg): void
+			{ self::call_logger($arg, PneLogger::AS_ERROR); }
 
-		public function return(array $data): array
-			{ return $this->execute('return', $this->signed($data, null, true)); }
+		public function log_info($arg): void
+			{ self::call_logger($arg, PneLogger::AS_INFO); }
 
-		public function status(array $data): array
-			{ return $this->execute('status', $this->signed($data, "{$this->login}{$data['client_orderid']}{$data['orderid']}{$this->control_key}")); }
+		public function verify_callback(array $params): bool
+			{ return hash_equals(sha1(($params['status'] ?? '').($params['orderid'] ?? '').($params['client_orderid'] ?? '').$this->control_key), $params['control'] ?? ''); }
 
-		private function signed(array $data, string $str=null, bool $add_login=false): array {
-			if (isset($str) || $add_login)
-				$data['login'] = $this->login;
+		public function sale(array $data, string $browser_info=''): array {
+			if (defined('PNE_SEND_BROWSER_INFO')) {
+				$data[($prefix = 'customer_browser_').'info'] = 'true';
 
-			$data['control'] = sha1($str ?? "{$this->end_point}{$data['client_orderid']}".($data['amount'] * 100)."{$data['email']}{$this->control_key}");
-			return $data;
+				foreach ([ 'ACCEPT' => 'accept_header', 'USER_AGENT' => 'user_agent', 'ACCEPT_LANGUAGE' => 'accept_language' ] as $in => $out)
+					$data[$prefix.$out] = substr($_SERVER["HTTP_$in"], 0, $in == 'ACCEPT_LANGUAGE' ? 8 : 2048);
+
+				$data += array_combine(array_map(fn($k) => $prefix.$k, explode(' ', 'javascript_enabled java_enabled color_depth screen_height screen_width time_zone')),
+					json_decode($browser_info));
+			}
+
+			$action = ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : '');
+
+			return $this->execute($action,
+				$this->signed($data, "{$this->end_point}{$data['client_orderid']}".($data['amount'] * 100)."{$data['email']}{$this->control_key}", false));
 		}
 
-		private function execute(string $action, array $data): array {
+		public function void(array $data): array
+			{ return $this->execute('void', $this->signed($data)); }
+
+		public function return(array $data): array
+			{ return $this->execute('return', $this->signed($data, "{$this->login}{$data['client_orderid']}{$data['orderid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}")); }
+
+		public function capture(array $data): array {
+			return $this->execute('capture', $this->signed($data,
+				isset($data['amount']) ? "{$this->login}{$data['client_orderid']}{$data['orderid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}" : null));
+		}
+
+		public function make_rebill(array $data): array {
+			return $this->execute('make-rebill-sale', $this->signed($data += [ 'recurrent_scenario' => 'REGULAR', 'recurrent_initiator' => 'MERCHANT' ],
+				"{$this->login}{$data['client_orderid']}{$data['cardrefid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}"));
+		}
+
+		public function get_card_info(array $data): array
+			{ return $this->execute('get-card-info', $this->signed($data, "{$this->login}{$data['cardrefid']}{$this->control_key}")); }
+
+		public function status(array $data): array
+			{ return $this->execute('status', $this->signed($data)); }
+
+		public function create_card_ref(array $data): array
+			{ return $this->execute('create-card-ref', $this->signed($data)); }
+
+		private function signed(array $data, string $str=null, bool $add_login=true): array {
+			if ($add_login)
+				$data['login'] = $this->login;
+
+			return array_merge($data, ['control' => sha1($str ?? "{$this->login}{$data['client_orderid']}{$data['orderid']}{$this->control_key}")]);
+		}
+
+		private function execute(string $action, array $data, string $api='/api/v2'): array {
+			$url = $this->gate."$api/$action".($this->is_multicurr ? '/group/' : '/').$this->end_point;
+
 			if ($this->debug_flags & self::DEBUG_TRACE_REQUESTS) {
-				trace([ 'REQUEST' => $action ], ' -- ');
+				trace([ 'REQUEST'.($this->debug_flags & self::DEBUG_FAKE_REQUESTS ? '-FAKE' : '') => $url ], ' -- ');
 				trace($data, ' -> ');
 			}
 
 			if ($this->debug_flags & self::DEBUG_FAKE_REQUESTS) {
-				trigger_error('DEBUG_MODE, gate requests/responses are fake', E_USER_WARNING);
+					# 0/1/2/3
+					$forced_type = [null,'reversal','chargeback','void'][substr((string)($data['orderid'] ?? ''), -4, 1)] ?? null;
+
+				# test-orderid suffix picks the fake response, like a gateway's test card numbers:
+				# 995/996/997 => 3DS processing (redirect / html / plugin's own ticker fallback)
+				$suffix = substr((string)($data['orderid'] ?? ''), -3);
+				$fake_status = [
+					'991' => 'unknown',
+					'992' => 'error',
+					'993' => 'declined',
+					'994' => 'chain_declined',
+					'995' => 'processing',
+					'996' => 'processing',
+					'997' => 'processing' ][$suffix] ?? 'approved';
+
+				if ($fake_status === 'error')
+					throw new PneException('Fake gateway error (test orderid suffix 992)', $data, [], [], 12);
 
 				$fake = [
-					'sale' => [ 'type' => 'async-response' ],
-					'sale-form' => [ 'type' => 'async-response' ],
-					'status' => [ 'status' => 'approved' ],
-					'return' => [ 'status' => 'approved' ] ];
+					'make-rebill-sale' => [ 'type' => 'async-response' ],
+					'preauth'          => [ 'type' => 'async-response' ],
+					'capture'          => [ 'type' => 'async-response' ],
+					'sale'             => [ 'type' => 'async-response' ],
+					'sale-form'        => [ 'type' => 'async-form-response' ],
+					'preauth-form'     => [ 'type' => 'async-form-response' ],
+					'return'           => [ 'status' => $fake_status ],
+					'void'             => [ 'status' => $fake_status ],
+					'create-card-ref'  => [ 'type' => 'create-card-ref-response', 'card-ref-id' => 'fake-card-ref-id' ],
+					'get-card-info'    => [ 'type' => 'get-card-info-response', 'card-printed-name' => 'FAKE TEST CARD',
+						'bin' => '444455', 'last-four-digits' => '1111', 'expire-year' => (string)(date('Y') + 2), 'expire-month' => '12' ],
+					'status' => array_filter([ 'status' => $fake_status, 'transaction-type' => $forced_type ?? ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : ''),
+						'redirect-to' => $suffix == '997' ? 'https://example.test/fake-3ds-redirect' : null, 'html' => $suffix == '996' ? '<div>fake 3ds html</div>' : null ]) ];
 
 				return array_merge($fake[$action], [ 'merchant-order-id' => $data['client_orderid'], 'paynet-order-id' => time(), 'serial-number' => '00000000-0000-0000-0000-000000000000' ]);
 			}
 
-			$Curl = curl_init($this->gate.self::URL_SUFFIX."/$action".($this->is_multicurr ? '/group/' : '/').$this->end_point);
+			$Curl = curl_init($url);
 			curl_setopt_array($Curl, [
 				CURLOPT_HEADER					=> 0,
-				CURLOPT_USERAGENT				=> self::USERAGENT,
-				CURLOPT_SSL_VERIFYHOST	=> 0,
-				CURLOPT_SSL_VERIFYPEER	=> 0,
 				CURLOPT_POST						=> 1,
 				CURLOPT_RETURNTRANSFER	=> 1,
+				CURLOPT_USERAGENT				=> self::USERAGENT,
+				CURLOPT_SSL_VERIFYHOST	=> self::is_debug_mode() ? 0 : 2,
+				CURLOPT_SSL_VERIFYPEER	=> self::is_debug_mode() ? 0 : 1,
 				CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
 			if (self::is_debug_mode())
@@ -292,7 +405,7 @@ namespace Payneteasy {
 			curl_close($Curl);
 
 			if (!empty($errmsg))
-				throw new PneException($errmsg, $data);
+				throw new PneException($errmsg, $data, [], [ 'REQUEST' => $url ]);
 			elseif (empty($response))
 				throw new PneException('Card processing response is empty', $data);
 
@@ -304,8 +417,28 @@ namespace Payneteasy {
 				trace($result, ' <- ');
 			}
 
-			if ($result['type'] == 'validation-error')
-				throw new PneException("Card processing returned error: '{$result['error-message']}'", $data, $result);
+			$success_types = [
+				'status'           => 'status-response',
+				'make-rebill-sale' => 'async-response',
+				'return'           => 'async-response',
+				'void'             => 'async-response',
+				'sale'             => 'async-response',
+				'preauth'          => 'async-response',
+				'capture'          => 'async-response',
+				'preauth-form'     => 'async-form-response',
+				'sale-form'        => 'async-form-response',
+				'create-card-ref'  => 'create-card-ref-response',
+				'get-card-info'    => 'get-card-info-response' ];
+
+			$type = $result['type'] ?? '';
+
+			if (in_array($type, [ 'validation-error', 'error' ]) || ($result['status'] ?? '') == 'error')
+				throw new PneException('Card processing returned error: "'.($result['error_message'] ?? $result['error-message'] ?? '').'"',
+					$data, $result, [ 'URL' => $url ],
+					(int)($result['error_code'] ?? $result['error-code'] ?? 0));
+
+			if ($type !== $success_types[$action])
+				throw new PneException("Card processing returned unexpected response type: '$type', expected '{$success_types[$action]}'", $data, $result, [ 'URL' => $url ]);
 
 			return $result;
 		}

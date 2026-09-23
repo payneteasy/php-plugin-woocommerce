@@ -67,8 +67,8 @@
 			$toggle.on('change', () => do_toggle($toggle, key))
 		})
 
-		$('[data-toggle-row]').each((i, el) => {
-			var $toggle = $(el), $row = $('#'+field_prefix+$toggle.data('toggleRow')).closest(row_selector)
+		$('[data-toggle-dependant]').each((i, el) => {
+			var $toggle = $(el), $row = $('#'+field_prefix+$toggle.data('toggleDependant')).closest(row_selector)
 
 			$row.toggle($toggle.is(':checked'))
 

@@ -1,0 +1,38 @@
+.pne-log-toggle { display:inline-block; width:14px }
+#pne-log-toggle-all { width:110px; white-space:nowrap }
+
+.pne-log-type-filter-label { cursor:pointer; padding:2px 6px; border-radius:3px; transition:background-color .15s; color:#0073AA }
+.pne-log-type-filter-label.pne-log-is-error { color:#C00 }
+.pne-log-type-filter-label:hover { background-color:rgba(0,0,0,.06) }
+
+.pne-log-type-count-wrap { display:inline-flex; flex-direction:column; margin-left:8px; vertical-align:middle; line-height:1.15 }
+.pne-log-type-count { font-weight:normal; color:initial; font-family:monospace }
+.pne-log-type-delta { font-size:10px; color:#0A0; font-family:monospace }
+
+#pne-log div { border-left:4px solid #0073AA; padding:8px 12px; margin-bottom:8px; background:#FFF }
+#pne-log time { padding:2px 4px; font-weight:600 }
+#pne-log time:not(summary *) { margin-left:8px; color:#0073AA }
+#pne-log a { color:#000; text-decoration:underline }
+#pne-log a:hover { color:#00F }
+#pne-log a:visited { color:#999 }
+#pne-log div:has(details) { border-left-color:#C00 }
+#pne-log code { background:#F9F9F9; margin-right:2px; border-radius:6px }
+#pne-log summary { cursor:pointer; transition:background-color .15s }
+#pne-log summary:hover { background:rgba(0,0,0,.06) }
+#pne-log summary::marker { color:#C00; font-size:11px }
+#pne-log summary time { color:#C00; margin:0 4px 0 -4px }
+#pne-log div[data-level="ERROR"] { border-left:4px solid #C00 }
+#pne-log div[data-level="ERROR"] time { color:#C00 }
+
+#pne-log table { border-collapse:collapse; margin:0 0 8px; border:1px dotted #EEE }
+#pne-log table:last-child { margin-bottom:0 }
+#pne-log table tr:nth-child(even) { background:rgba(0,0,0,.04) }
+#pne-log table td, #pne-log table th { padding:2px 8px }
+#pne-log table th { text-align:right }
+
+#pne-log .rea, #pne-log .cha, #pne-log .voa { background:#000; color:#F80; padding:0 8px; border-radius:6px }
+#pne-log .saa, #pne-log .caa, #pne-log .pra { color:#0A0; font-weight:bold }
+#pne-log .sad, #pne-log .prd, #pne-log .red, #pne-log .cha { color:#F00 }
+#pne-log .sap, #pne-log .sau, #pne-log .sac, #pne-log .prp, #pne-log .pru, #pne-log .prc { color:#09F }
+#pne-log .voa { color:#FF0 }
+#pne-log .sae, #pne-log .pre, #pne-log .ree, #pne-log .ref { color:#F00; text-decoration:line-through }

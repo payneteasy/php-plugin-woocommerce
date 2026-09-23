@@ -28,7 +28,6 @@ use Payneteasy\PneConfig;
 use Payneteasy\PneException;
 use Payneteasy\PneLogger;
 
-register_activation_hook(__FILE__, 'hook_activate_wc_paynet_payment_gateway');
 register_uninstall_hook(__FILE__, 'hook_uninstall_wc_paynet_payment_gateway');
 
 add_action('plugins_loaded', 'hook_init_wc_paynet_payment_gateway');
@@ -42,61 +41,67 @@ function hook_init_wc_paynet_payment_gateway(): void {
 	if (!class_exists('WC_Payment_Gateway') || class_exists(PNE_PLUGIN_CLASS))
 		return;
 
-	trait PneString { private static function _T(string $str, ...$args): string { $t = __($str, PNE_PLUGIN_SLUG); return $args ? sprintf($t, ...$args) : $t; } }
-
 	add_filter('plugin_action_links_'.PNE_PLUGIN_BASENAME, [PNE_PLUGIN_CLASS, 'hook_plugin_action_links']);
 	add_filter('wc_order_statuses', ['WC_Payneteasy_OrderStatusExpander', 'hook_order_statuses']);
 	add_filter('woocommerce_register_shop_order_post_statuses', ['WC_Payneteasy_OrderStatusExpander', 'hook_register_custom_statuses']);
+	add_action('payneteasy_process_rebill', fn($order_id) => WC()->payment_gateways()->payment_gateways()[PNE_PLUGIN_ID]->hook_process_rebill($order_id));
+
+	foreach (explode(' ', 'woocommerce_trash_order woocommerce_delete_order wp_trash_post before_delete_post') as $action)
+		add_action($action, ['WC_Payneteasy', 'hook_delete_order' ]);
+
+	trait PneString { private static function _T(string $str, ...$args): string { $t = __($str, PNE_PLUGIN_SLUG); return $args ? sprintf($t, ...$args) : $t; } }
 
 	if (is_admin()) {
 		require_once __DIR__.'/WC_Payneteasy/SelfUpdater.php';
-		add_filter('plugins_api', ['WC_Payneteasy\SelfUpdater', 'hook_plugin_update_info'], 20, 3);
-		add_filter('pre_set_site_transient_update_plugins', ['WC_Payneteasy\SelfUpdater', 'hook_plugin_check_version']);
-
-		if (('wc-status' == ($_GET['page'] ?? '')) || (wp_doing_ajax() && in_array($_REQUEST['action'] ?? '', ['pne_log_viewer_fetch', 'pne_log_viewer_counts'], true))) {
-			require_once __DIR__.'/WC_Payneteasy/LogViewer.php';
-			add_filter('woocommerce_admin_status_tabs', ['WC_Payneteasy\LogViewer', 'hook_status_tabs']);
-			add_action('woocommerce_admin_status_content_pne-log', ['WC_Payneteasy\LogViewer', 'show']);
-			add_action('wp_ajax_pne_log_viewer_fetch', ['WC_Payneteasy\LogViewer', 'ajax_fetch']);
-			add_action('wp_ajax_pne_log_viewer_counts', ['WC_Payneteasy\LogViewer', 'ajax_counts']);
-		}
+		require_once __DIR__.'/WC_Payneteasy/LogViewer.php';
 	}
 
 	class WC_Payneteasy extends WC_Payment_Gateway { use PneString;
 		private $Api, $Cfg, $OrderStatus;
 		private string $notify_url;
 
+		private const DO_RECHECK_STATUS = 'do_recheck_status';
+
 		function __construct() {
 			$this->id = PNE_PLUGIN_ID;
-			$this->icon = apply_filters('woocommerce_payneteasy_icon', PNE_PLUGIN_URL.'payneteasy.png');
+			$this->icon = apply_filters('woocommerce_payneteasy_icon', PNE_PLUGIN_URL.'assets/img/payneteasy.png');
 			$this->method_title = self::_T('Payneteasy online card payment system');
 			$this->method_description = self::_T('Allows you to use online card payment system by Payneteasy with the WooCommerce.');
 			$this->has_fields = false;
 			$this->supports = [
 				'products', # avoid potential incompatibility
-				'refunds',
-				'subscriptions'];
+				'refunds'];
 
 			$this->Api = new PneApi($this->Cfg = $this->init_config(),
 				PneLogger::as_plaintext(
 					fn($text) => wc_get_logger()->error($text, [ 'source' => PNE_PLUGIN_ID ]),
 					fn($text) => wc_get_logger()->info($text, [ 'source' => PNE_PLUGIN_ID ])));
 
-			$this->OrderStatus = new WC_Payneteasy_OrderStatusHandler($this->get_option('transaction_end'), $this->Cfg->IS_PREAUTH);
+			$this->OrderStatus = new WC_Payneteasy_OrderStatusHandler($this->Cfg->IS_PREAUTH);
 			$this->form_fields = WC_Payneteasy_SettingsForm::init($this->Cfg);
 
 			add_action("woocommerce_update_options_payment_gateways_{$this->id}", [$this, 'process_admin_options']);
 			add_action('admin_enqueue_scripts', [$this, 'hook_enqueue_admin_scripts']);
+			add_action('wp_enqueue_scripts', [$this, 'hook_enqueue_checkout_style']);
 			add_action('admin_notices', [$this, 'hook_admin_notice_info']);
 			add_action("woocommerce_api_{$this->id}_return", [$this, 'hook_return_handler']);
 			add_action("woocommerce_api_{$this->id}_webhook", [$this, 'hook_webhook_handler']);
 			add_action("woocommerce_api_{$this->id}_ajax", [$this, 'hook_ajax_handler']);
-			add_action("scheduled_subscription_payment_{$this->id}", [$this, 'process_subscription_payment'], 10, 2);
 			add_action('woocommerce_order_status_changed', [$this, 'hook_auto_capture'], 10, 4);
+			add_action('woocommerce_email_order_details', [$this, 'hook_email_payment_details'], 10, 4);
 		}
 
 		public static function hook_plugin_action_links(array $links): array
 			{ return array_merge([ 'settings' => '<a href="'.admin_url('admin.php?page=wc-settings&tab=checkout&section=wc_payneteasy').'">Settings</a>' ], $links); }
+
+		public static function hook_delete_order($order_id): void {
+			wp_clear_scheduled_hook('payneteasy_process_rebill', [ (int)$order_id ]);
+
+			if (($O = wc_get_order($order_id)) && $O->get_meta('_payneteasy_rebill')) {
+				$O->delete_meta_data('_payneteasy_rebill');
+				$O->save();
+			}
+		}
 
 		public static function test_card(string $how='as array'): array {
 			$values = [ 4444_5555_6666_1111, date('Y')+2, 12, 'Test Name' ];
@@ -111,85 +116,131 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				wp_enqueue_style('payneteasy_admin_settings', PNE_PLUGIN_URL.'assets/css/admin_settings.css', [], PNE_PLUGIN_VERSION);
 			}
 
-			if ('woocommerce_page_wc-status' == $hook && ($_GET['tab'] ?? '') == 'pne-log') {
-				wp_enqueue_script('payneteasy-log-viewer', PNE_PLUGIN_URL.'assets/js/admin_log_viewer.js', ['jquery'], PNE_PLUGIN_VERSION, true);
-				wp_localize_script('payneteasy-log-viewer', 'pneLogViewer', [ 'ajaxUrl' => admin_url('admin-ajax.php?payneteasy_logviewer_poll'), 'nonce' => wp_create_nonce('pne_log_viewer') ]);
-			}
+			if (($screen = get_current_screen())
+					&& $screen->id == \Automattic\WooCommerce\Utilities\OrderUtil::get_order_admin_screen()
+					&& ($O = wc_get_order($_GET['id'] ?? $_GET['post'] ?? ''))) {
+				wp_enqueue_script('payneteasy-order-page-script', plugins_url('/assets/js/admin_order.js', __FILE__), ['jquery'], PNE_PLUGIN_VERSION, true);
 
-			if (($screen = get_current_screen()) && $screen->id == \Automattic\WooCommerce\Utilities\OrderUtil::get_order_admin_screen()) {
-				if (($O = wc_get_order($_GET['id'] ?? $_GET['post'] ?? '')) && $O->get_payment_method() == $this->id && !in_array($O->get_status(), ['failed','refunded','cancelled'])) {
-					wp_enqueue_script('payneteasy-order-page-script', plugins_url('/assets/js/admin_order.js', __FILE__), ['jquery'], PNE_PLUGIN_VERSION, true);
+				$is_order_payneteasy = $O->get_payment_method() == $this->id && !in_array($O->get_status(), ['refunded','chargeback','cancelled']);
 
-					wp_localize_script('payneteasy-order-page-script', 'payneteasy_ajax_var', [
-						'nonce' => wp_create_nonce('payneteasy-ajax-nonce'),
-						'api_url' => home_url('/wc-api/wc_payneteasy_ajax'),
-						'order_id' => $O->get_id(),
-						'paynet_order_id' => $this->paynet_order_id($O),
+				wp_localize_script('payneteasy-order-page-script', 'payneteasy_ajax_var', array_merge([
+					'nonce' => wp_create_nonce('payneteasy-ajax-nonce'),
+					'api_url' => home_url('/wc-api/wc_payneteasy_ajax'),
+					'order_id' => $O->get_id(),
+					'is_order_payneteasy' => $is_order_payneteasy ],
+					$is_order_payneteasy ? [
+						'rebill' => $O->get_meta('_payneteasy_rebill') ?: null,
+						'card_ref' => (bool)$O->get_meta('_payneteasy_card_ref_id'),
+						'can_schedule' => $O->get_status() == 'paid',
 						'show_capture' => $O->get_status() == 'authorized' && $this->Cfg->IS_CAPTURE_MANUAL,
-						'capture_amount' => $O->get_total() ]);
-				}
+						'interval_unit' => PneApi::is_debug_mode() ? 'minutes (debug mode)' : 'days',
+						'capture_amount' => $O->get_total(),
+						'paynet_order_id' => $this->paynet_id($O) ] : []));
 			}
 
-			if ($screen && in_array($screen->id, [\Automattic\WooCommerce\Utilities\OrderUtil::get_order_admin_screen(), 'edit-shop_order'], true))
+			if ($screen && in_array($screen->id, [\Automattic\WooCommerce\Utilities\OrderUtil::get_order_admin_screen(), 'edit-shop_order'], true)) {
 				wp_enqueue_style('payneteasy-admin-order', PNE_PLUGIN_URL.'assets/css/admin_order.css', [], PNE_PLUGIN_VERSION);
-
-			# WC Subscriptions
-			if ($screen && $screen->id == 'shop_subscription'
-					&& ($O = wc_get_order($_GET['id'] ?? $_GET['post'] ?? '')) && $O->get_meta('_payneteasy_card_ref_id')) {
-				wp_enqueue_script('payneteasy-subscription-page-script', plugins_url('/assets/js/admin_subscription.js', __FILE__), ['jquery'], PNE_PLUGIN_VERSION, true);
-				wp_localize_script('payneteasy-subscription-page-script', 'payneteasy_ajax_var',
-					[ 'nonce' => wp_create_nonce('payneteasy-ajax-nonce'), 'api_url' => home_url('/wc-api/wc_payneteasy_ajax'), 'order_id' => $O->get_id() ]);
+				wp_add_inline_script('jquery-core', 'jQuery($ => $(".wp-list-table .check-column").addClass("no-link"))');
 			}
 		}
 
+		public function hook_enqueue_checkout_style(): void {
+			if (is_checkout())
+				wp_enqueue_style('payneteasy-checkout', PNE_PLUGIN_URL.'assets/css/checkout.css', [], PNE_PLUGIN_VERSION);
+		}
+
 		public function hook_admin_notice_info(): void {
-			if ($message = get_option('pne_admin_notice_info')) {
+			if ($notice = get_option('pne_admin_notice_info')) {
 				delete_option('pne_admin_notice_info');
-				echo '<div class="notice notice-info is-dismissible"><p>'.esc_html($message).'</p></div>';
+
+				[ $type, $message ] = $notice;
+				echo "<div class='notice notice-$type'><p>".esc_html($message).'</p></div>';
 			}
 		}
 
 		public function hook_ajax_handler(): void {
 			try {
-				if (empty($action = $_POST['action']))
-					throw new \Exception(self::_T('Required action not specified.'));
-
-				if (!wp_verify_nonce($_POST['nonce'] ?? '', 'payneteasy-ajax-nonce'))
-					throw new \Exception(self::_T('Failed ajax validation.'));
+				if (empty($action = $_POST['action'])
+						|| !wp_verify_nonce($_POST['nonce'] ?? '', 'payneteasy-ajax-nonce')
+						|| !current_user_can('manage_woocommerce'))
+					throw new \Exception(self::_T('Invalid call.'));
 
 				$O = $this->order($_POST['order_id']);
 
-				if ($action == 'check_status') {
-					if (($before = $O->get_status()) != ($after = $this->OrderStatus->set($O, $Pr = $this->PaymentResponse($O)))) {
-						$O->add_order_note(self::_T('Manual "Check status" changed order status from %s to %s.', $before, $after));
-						self::admin_notice_success($message = self::_T('Order status updated.'));
-					}
-					else
-						self::admin_notice_info($message = self::_T('Order status not changed'));
-				}
-				elseif ($action == 'card_info') {
-					if (empty($card_ref_id = $O->get_meta('_payneteasy_card_ref_id')))
-						throw new \Exception(self::_T('No saved card reference for this subscription.'));
+				switch ($action) {
+					case 'check_status':
+						if (($before = $O->get_status()) != ($after = $this->OrderStatus->set($O, $this->check_PaymentStatus($O)))) {
+							$O->add_order_note(self::_T('Manual "Check status" changed order status from %s to %s.', $before, $after));
+							self::admin_notice_success($message = self::_T('Order status updated.'));
+						}
+						else
+							self::admin_notice_info($message = self::_T('Order status not changed'));
+						break;
 
-					$info = $this->Api->get_card_info([ 'cardrefid' => $card_ref_id ]);
-					$message = self::_T('%s, card ending %s, expires %02d/%d.',
-						$info['card-printed-name'], $info['last-four-digits'], $info['expire-month'], $info['expire-year']);
-				}
-				elseif ($action == 'capture') {
-					if (!$this->process_capture($O, isset($_POST['amount']) ? (float)$_POST['amount'] : null))
-						throw new \Exception(self::_T('Capture failed, see the order notes for details.'));
+					case 'card_info':
+						if (empty($card_ref_id = $O->get_meta('_payneteasy_card_ref_id')))
+							throw new \Exception(self::_T('No saved card reference for this order.'));
 
-					self::admin_notice_success($message = self::_T('Capture successful.'));
+						$info = $this->Api->get_card_info([ 'cardrefid' => $card_ref_id ]);
+						$message = self::_T('%s, card ending %s, expires %02d/%d.', $info['card-printed-name'], $info['last-four-digits'], $info['expire-month'], $info['expire-year']);
+						break;
+
+					case 'capture':
+						if ($this->process_capture($O, isset($_POST['amount']) ? (float)$_POST['amount'] : null))
+							self::admin_notice_success($message = self::_T('Capture completed.'));
+						else
+							throw new \Exception(self::_T('Capture failed.'));
+
+						break;
+
+					case 'schedule_rebill':
+						if (!in_array($type = $_POST['type'] ?? '', ['monthly', 'every_n_days', 'last_day'], true) || !strtotime($_POST['start'] ?? ''))
+							throw new \Exception(self::_T('Invalid rebill schedule.'));
+
+						$Start = new \DateTime($_POST['start'], wp_timezone());
+						$schedule = [ 'type' => $type, 'next' => $Start->format('Y-m-d') ];
+
+						if ($type == 'monthly')
+							$schedule['day'] = (int)$Start->format('j');
+						elseif ($type == 'every_n_days' && ($schedule['interval'] = (int)($_POST['interval'] ?? 0)) < 1)
+							throw new \Exception(self::_T('Interval must be at least 1 day.'));
+
+						if (empty($O->get_meta('_payneteasy_card_ref_id'))) {
+							$response = $this->Api->create_card_ref([ 'client_orderid' => $O->get_id(), 'orderid' => $this->paynet_id($O) ]);
+							$O->update_meta_data('_payneteasy_card_ref_id', $response['card-ref-id']);
+						}
+
+						$O->update_meta_data('_payneteasy_rebill', $schedule);
+						$O->save();
+
+						wp_clear_scheduled_hook('payneteasy_process_rebill', [ $O->get_id() ]);
+						wp_schedule_single_event($Start->getTimestamp(), 'payneteasy_process_rebill', [ $O->get_id() ]);
+
+						$O->add_order_note(self::_T('Recurring rebills scheduled, starting %s, %s.', $schedule['next'], self::rebill_mode($schedule)));
+
+						$message = self::_T('Rebills scheduled, next on %s.', $schedule['next']);
+						break;
+
+					case 'cancel_rebill':
+						$schedule = $O->get_meta('_payneteasy_rebill');
+
+						wp_clear_scheduled_hook('payneteasy_process_rebill', [ $O->get_id() ]);
+						$O->delete_meta_data('_payneteasy_rebill');
+						$O->save();
+
+						$O->add_order_note(self::_T('Recurring rebills cancelled, the next one was due %s.', $schedule['next']));
+
+						$message = self::_T('Rebills cancelled.');
 				}
 
-				wp_send_json([ 'success' => true, 'message' => $message ]);
+				wp_send_json(array_filter([ 'success' => true, 'message' => $message, 'status' => isset($status) ? "wc-$status" : null ]));
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
+			catch (\Exception $e) {
+				if ($e instanceof PneException)
+					$this->order_exception_note($O, $e);
+
 				wp_send_json([ 'success' => false, 'message' => $e->getMessage() ]);
 			}
-			catch (\Exception $e)
-				{ wp_send_json([ 'success' => false, 'message' => $e->getMessage() ]); }
 		}
 
 		public function hook_return_handler(): void {
@@ -197,28 +248,23 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				if (!hash_equals(($O = $this->order($_GET['orderId']))->get_order_key(), (string)($_GET['key'] ?? '')))
 					throw new \Exception(self::_T('Invalid order key.'));
 
-				$this->OrderStatus->set($O, $Pr = $this->PaymentResponse($O));
-				$this->store_card_ref($O, $Pr);
+				$this->OrderStatus->set($O, $Pr = $this->check_PaymentStatus($O));
 
 				if ($Pr->is_processing() && $Pr->redirect())
 					wp_redirect($Pr->redirect());
 				elseif ($Pr->is_processing())
-					$this->print_page($Pr->three_d_html() ?: '<div style="width: 100%; text-align: center"><div><h1>Your payment is being processed.</h1></div>
-							<div><a href="'.$this->return_url($O).'" id="ticker">Check status</a></div></div>
-							<script>let t_el = document.getElementById("ticker");let t_s=t_el.innerHTML,t_pos=0,t_iv=setInterval(() => {
-							if (++t_pos <= t_s.length) { if (t_s[t_pos] == " ") t_pos++; t_el.innerHTML = "<span style=\'color:#09C\'>"+t_s.slice(0, t_pos)+"</span>"+t_s.slice(t_pos) }
-							else { clearInterval(t_iv); t_el.click() } }, 300)</script>');
+					$this->print_page($Pr->three_d_html() ?: $this->ticker_html($O));
 				else
 					wp_redirect($O->get_checkout_order_received_url());
 
 				exit;
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
+			catch (\Exception $e) {
+				if ($e instanceof PneException)
+					$this->order_exception_note($O, $e);
+
 				wp_die( $e->getMessage() );
 			}
-			catch (\Exception $e)
-				{ wp_die( $e->getMessage() ); }
 		}
 
 		public function hook_webhook_handler(): void {
@@ -226,7 +272,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			[ $order_id, $type, $paynet_id, $status ] = [ $in['client_orderid'], $in['type'], $in['orderid'], $in['status'] ];
 
 			try {
-				if (!$this->Api->verify_callback($in))
+				if (!$this->Api->verify_callback_signature($in))
 					throw new \Exception(self::_T('Invalid callback signature.'));
 
 				$this->Api->log_info("$type/$status orderid=$paynet_id client_orderid=$order_id");
@@ -234,27 +280,118 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				if ($this->OrderStatus->is($O = $this->order($order_id), "$type/$status"))
 					exit('OK');
 
-				$this->OrderStatus->set($O, $Pr = $this->PaymentResponse($O, $paynet_id));
-				$this->store_card_ref($O, $Pr);
+				if (!$this->paynet_id($O)) {
+					$O->set_transaction_id($paynet_id);
+					$O->save();
+				}
+
+				$this->OrderStatus->set($O, $this->check_PaymentStatus($O, $paynet_id));
 
 				exit;
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
-				die($e->getMessage());
-			}
 			catch (\Exception $e) {
-				$this->Api->log_error("$type/$status orderid=$paynet_id client_orderid=$order_id &rarr; ".$e->getMessage());
+				$e instanceof PneException
+					? $this->order_exception_note($O, $e)
+					: $this->Api->log_error("$type/$status orderid=$paynet_id client_orderid=$order_id &rarr; ".$e->getMessage());
+
 				die($e->getMessage());
 			}
 		}
 
 		public function hook_auto_capture($order_id, $status_from, $status_to, $order): void {
 			if ($order->get_payment_method() != $this->id || !$this->Cfg->IS_PREAUTH || $this->Cfg->IS_CAPTURE_MANUAL
-					|| $status_from != 'authorized' || $status_to != 'processing')
+					|| $status_from != 'authorized' || !in_array($status_to, ['processing', 'completed']))
 				return;
 
 			$this->process_capture($order);
+		}
+
+		public function hook_email_payment_details($order, $sent_to_admin, $plain_text, $email): void {
+			if ($plain_text
+					|| !($order instanceof \WC_Order)
+					|| $this->id != $order->get_payment_method()
+					|| !($details = $order->get_meta('_payneteasy_payment_details')))
+				return;
+
+			$country_code = strstr($cc = get_option('woocommerce_default_country'), ':', true) ?: $cc;
+
+			$rows = array_filter([
+				self::_T('Card type') => $details['card_type'] ?? null,
+				self::_T('Merchant Name') => get_bloginfo('name'),
+				self::_T('Merchant Country') => WC()->countries->countries[$country_code] ?? '',
+				self::_T('Authorization code') => $details['approval_code'] ?? null,
+				self::_T('Customer service contact') => get_option('woocommerce_email_from_address'),
+				self::_T('Retrieval Reference Number') => $details['rrn'] ?? null,
+				self::_T('Card number, the final 4 digits') => $details['card_last4'] ?? null ]);
+
+			$links = [
+				self::_T('Return policy') => home_url('/return-policy/'),
+				self::_T('Refund policy') => home_url('/refund-policy/'),
+				self::_T('Merchant online address') => home_url() ];
+
+			echo '<h3>'.self::_T('Payment details').'</h3><ul>'
+				.implode('', array_map(fn($k, $v) => '<li><b>'.esc_html($k).'</b>: '.esc_html($v).'</li>', array_keys($rows), $rows))
+				.implode('', array_map(fn($k, $v) => '<li><b>'.esc_html($k).'</b>: <a href="'.esc_url($v).'">'.esc_html($v).'</a></li>', array_keys($links), $links))
+				.'</ul>';
+		}
+
+		public function hook_process_rebill(int $order_id): void {
+			if (!($O = wc_get_order($order_id))
+					|| !($schedule = $O->get_meta('_payneteasy_rebill'))
+					|| empty($card_ref_id = $O->get_meta('_payneteasy_card_ref_id')))
+				return;
+
+			if (substr($schedule['next'], 0, 10) < current_time('Y-m-d')) {
+				$O->add_order_note(self::_T('Recurring rebill of %s skipped, its date has passed.', $schedule['next']));
+				$this->reschedule_rebill($O, $schedule);
+
+				return;
+			}
+
+			$renewal = wc_create_order([ 'customer_id' => $O->get_customer_id(), 'status' => 'pending' ]);
+
+			if (is_wp_error($renewal))
+				$O->add_order_note(self::_T('Recurring rebill: failed to create a new order: %s', $renewal->get_error_message()));
+			else {
+				foreach ($O->get_items() as $item) {
+					$renewal->add_item($new_item = clone $item);
+					$new_item->set_id(0);
+
+					foreach ($item->get_meta_data() as $meta)
+						$new_item->add_meta_data($meta->key, $meta->value);
+				}
+
+				$renewal->set_address($O->get_address('billing'), 'billing');
+				$renewal->set_address($O->get_address('shipping'), 'shipping');
+				$renewal->set_payment_method($this);
+				$renewal->calculate_totals(false);
+				$renewal->save();
+
+				try {
+					$response = $this->Api->make_rebill([
+						'amount' => $renewal->get_total(),
+						'currency' => $renewal->get_currency(),
+						'cardrefid' => $card_ref_id,
+						'ipaddress' => $_SERVER['SERVER_ADDR'] ?? '127.0.0.1',
+						'order_desc' => self::order_description($O, "Rebill of order $order_id /\n"),
+						'client_orderid' => $renewal->get_id(),
+						'server_callback_url' => home_url('?wc-api=wc_payneteasy_webhook&rebill') ]);
+
+					$renewal->set_transaction_id($response['paynet-order-id']);
+
+					$renewal->update_status('on-hold', self::_T('Rebilling of <a href="%s">#%d</a>.', $O->get_edit_order_url(), $order_id));
+					$O->add_order_note(self::_T('Rebill order <a href="%s">#%d</a> created.', $renewal->get_edit_order_url(), $renewal->get_id()));
+				}
+				catch (\Exception $e) {
+					if ($e instanceof PneException)
+						$this->order_exception_note($renewal, $e);
+
+					$renewal->update_status('failed', self::_T('Rebilling of <a href="%s">#%d</a> failed: %s', $O->get_edit_order_url(), $order_id, $e->getMessage()));
+					$O->add_order_note(self::_T('Rebill order <a href="%s">#%d</a> failed.', $renewal->get_edit_order_url(), $renewal->get_id()));
+				}
+			}
+
+			$this->reschedule_rebill($O, $schedule);
 		}
 
 		public function payment_fields(): void
@@ -275,7 +412,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				WC_Admin_Settings::add_error($error);
 				return $this->settings[$k];
 			}
-			
+
 			return wc_clean(wp_unslash($v ?? ''));
 		}
 
@@ -291,42 +428,16 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 				return [ 'result' => 'success', 'redirect' => $sale['redirect-url'] ?? $this->return_url($O) ];
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
-				wc_add_notice($e->getMessage(), 'error');
-				return [ 'result' => 'failure' ];
-			}
 			catch (\Exception $e) {
+				if ($e instanceof PneException)
+					$this->order_exception_note($O, $e);
+
+				if (isset($O))
+					$O->update_status('failed', $e->getMessage());
+
 				wc_add_notice($e->getMessage(), 'error');
 				return [ 'result' => 'failure' ];
 			}
-		}
-
-		public function process_subscription_payment($amount_to_charge, object $renewal_order): void {
-			try {
-				$subscriptions = function_exists('wcs_get_subscriptions_for_renewal_order') ? wcs_get_subscriptions_for_renewal_order($renewal_order) : [];
-				$card_ref_id = ($subscription = reset($subscriptions)) ? $subscription->get_meta('_payneteasy_card_ref_id') : null;
-
-				if (empty($card_ref_id))
-					throw new \Exception(self::_T('No saved card reference for this subscription.'));
-
-				$response = $this->Api->make_rebill([
-					'amount' => $amount_to_charge,
-					'currency' => $renewal_order->get_currency(),
-					'cardrefid' => $card_ref_id,
-					'ipaddress' => $_SERVER['REMOTE_ADDR'] ?? '127.0.0.1',
-					'client_orderid' => $renewal_order->get_id() ]);
-
-				$this->try_record_trans_id([ 'paynet_order_id' => $response['paynet-order-id'], 'merchant_order_id' => $renewal_order->get_id() ]);
-
-				$renewal_order->update_status('on-hold', self::_T('Rebill request sent, awaiting confirmation.'));
-			}
-			catch (PneException $e) {
-				self::add_exception_note($renewal_order, $e);
-				$renewal_order->update_status('failed', $e->getMessage());
-			}
-			catch (\Exception $e)
-				{ $renewal_order->update_status('failed', $e->getMessage()); }
 		}
 
 		public function process_refund($order_id, $amount = null, $reason = ''): bool {
@@ -336,41 +447,41 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				$this->Api->return([
 					'amount' => $amount ?? $O->get_total(),
 					'comment' => $reason ?: 'Order cancel',
-					'orderid' => $this->paynet_order_id($O),
+					'orderid' => $this->paynet_id($O),
 					'currency' => $O->get_currency(),
 					'client_orderid' => $order_id ]);
 
 				return true;
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
+			catch (\Exception $e) {
+				if ($e instanceof PneException)
+					return 'refunded' == $this->order_exception_note($O, $e, self::DO_RECHECK_STATUS);
+
 				return false;
 			}
-			catch (\Exception $e)
-				{ return false; }
 		}
 
-		public function process_capture(object $O, ?float $amount = null): bool {
+		private function process_capture(object $O, ?float $amount = null): bool {
 			try {
-				$data = [ 'client_orderid' => $O->get_id(), 'orderid' => $this->paynet_order_id($O) ];
+				$data = [ 'client_orderid' => $O->get_id(), 'orderid' => $this->paynet_id($O) ];
 
 				if (isset($amount))
 					$data += [ 'amount' => $amount, 'currency' => $O->get_currency() ];
 
 				$this->Api->capture($data);
 
-				$O->update_status($this->OrderStatus->completed_status(), self::_T('Payment captured successfully.'));
+				$O->update_status('paid', self::_T('Payment captured successfully.'));
 				$O->payment_complete();
 				wc_reduce_stock_levels($O->get_id());
 
 				return true;
 			}
-			catch (PneException $e) {
-				self::add_exception_note($O, $e);
+			catch (\Exception $e) {
+				if ($e instanceof PneException)
+					return 'paid' == $this->order_exception_note($O, $e, self::DO_RECHECK_STATUS);
+
 				return false;
 			}
-			catch (\Exception $e)
-				{ return false; }
 		}
 
 		private function order($order_id=null): object {
@@ -396,6 +507,20 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		private function return_url(object $O): string
 			{ return home_url("?wc-api={$this->id}_return&orderId={$O->get_id()}&key=".$O->get_order_key()); }
 
+		private function ticker_html(object $O): string {
+			ob_start();
+
+			?>
+			<div style="width: 100%; text-align: center"><div><h1>Your payment is being processed.</h1></div>
+			<div><a href="<?= $this->return_url($O) ?>" id="ticker">Check status</a></div></div>
+			<script>let t_el = document.getElementById("ticker");let t_s=t_el.innerHTML,t_pos=0,t_iv=setInterval(() => {
+				if (++t_pos <= t_s.length) { if (t_s[t_pos] == " ") t_pos++; t_el.innerHTML = "<span style='color:#09C'>"+t_s.slice(0, t_pos)+"</span>"+t_s.slice(t_pos) }
+				else { clearInterval(t_iv); t_el.click() } }, 300)</script>
+			<?php
+
+			return ob_get_clean();
+		}
+
 		# themes without classic header.php/footer.php (all block/FSE themes) fall back to a deprecated ~2005 core template if wrapped, so only wrap when the theme actually provides both
 		private function print_page(string $content): void {
 			if ((file_exists(get_stylesheet_directory().'/header.php') || file_exists(get_template_directory().'/header.php'))
@@ -413,7 +538,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 			$response = $this->Api->sale([
 				'client_orderid' => $order_id,
-				'order_desc' => "Order #$order_id",
+				'order_desc' => self::order_description($O),
 				'amount' => $total,
 				'currency' => $O->get_currency(),
 				'address1' => $O->get_billing_address_1(),
@@ -423,7 +548,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'state' => $O->get_billing_state() ?? '',
 				'phone' => $O->get_billing_phone(),
 				'email' => $email,
-				'ipaddress' => $_SERVER['REMOTE_ADDR'],
+				'ipaddress' => PneApi::is_debug_mode() ? '127.0.0.1' : $_SERVER['REMOTE_ADDR'],
 				'cvv2' => $_POST['cvv2'] ?? '',
 				'ssn' => $_POST['ssn'] ?? '',
 				'credit_card_number' => $_POST['credit_card_number'] ?? '',
@@ -433,56 +558,94 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'first_name' => $O->get_shipping_first_name() ?: $O->get_billing_first_name(),
 				'last_name'  => $O->get_shipping_last_name() ?: $O->get_billing_last_name(),
 				'redirect_url' => $return_url,
-				'server_callback_url' => home_url('?wc-api=wc_payneteasy_webhook'),
-				'notify_url' => $this->Cfg->IS_SSN_REQUIRED ? $this->notify_url : '' ],
+				'notify_url' => $this->Cfg->IS_SSN_REQUIRED ? $this->notify_url : '',
+				'server_callback_url' => home_url('?wc-api=wc_payneteasy_webhook') ],
 				wp_unslash($_POST['pne_browser_info']));
 
-			$this->try_record_trans_id([ 'paynet_order_id' => $response['paynet-order-id'], 'merchant_order_id' => $response['merchant-order-id'] ]);
+			$O->set_transaction_id($response['paynet-order-id']);
+			$O->save();
 
 			return $response;
 		}
 
-		private function store_card_ref(object $O, Payneteasy_PaymentResponse $Pr): void {
-			if ('sale/approved' != $Pr
-					|| !function_exists('wcs_get_subscriptions_for_order')
-					|| !($subscriptions = wcs_get_subscriptions_for_order($O, [ 'order_type' => 'any' ])))
-				return;
+		private function reschedule_rebill(object $O, array $schedule): void {
+			$schedule['next'] = $this->rebill_next_date($schedule);
 
-			try {
-				$response = $this->Api->create_card_ref([ 'client_orderid' => $O->get_id(), 'orderid' => $this->paynet_order_id($O) ]);
+			$O->update_meta_data('_payneteasy_rebill', $schedule);
+			$O->save();
 
-				foreach ($subscriptions as $subscription) {
-					$subscription->update_meta_data('_payneteasy_card_ref_id', $response['card-ref-id']);
-					$subscription->save();
+			wp_schedule_single_event((new \DateTime($schedule['next'], wp_timezone()))->getTimestamp(), 'payneteasy_process_rebill', [ $O->get_id() ]);
+		}
+
+		private function rebill_next_date(array $schedule): string {
+			$D = new \DateTime($schedule['next'], wp_timezone());
+
+			if ($schedule['type'] == 'every_n_days' && PneApi::is_debug_mode()) {
+				do
+					$D->modify('+'.$schedule['interval'].' minutes');
+				while ($D < new \DateTime('now', wp_timezone()));
+
+				return $D->format('Y-m-d H:i');
+			}
+
+			do {
+				if ($schedule['type'] == 'every_n_days')
+					$D->modify('+'.$schedule['interval'].' days');
+				elseif ($schedule['type'] == 'last_day')
+					$D->modify('last day of next month');
+				else {
+					$D->modify('first day of next month');
+					$D->setDate((int)$D->format('Y'), (int)$D->format('m'), min($schedule['day'], (int)$D->format('t')));
 				}
 			}
-			catch (PneException $e)
-				{ self::add_exception_note($O, $e); }
+			while ($D->format('Y-m-d') < current_time('Y-m-d'));
+
+			return $D->format('Y-m-d');
 		}
 
-		private function PaymentResponse(object $O, $paynet_id = null): Payneteasy_PaymentResponse
-			{ return new Payneteasy_PaymentResponse($this->Api->status([ 'client_orderid' => $O->get_id(), 'orderid' => $paynet_id ?: $this->paynet_order_id($O) ])); }
+		private function check_PaymentStatus(object $O, $paynet_id = null): Payneteasy_PaymentStatus
+			{ return new Payneteasy_PaymentStatus($this->Api->status([ 'client_orderid' => $O->get_id(), 'orderid' => $paynet_id ?: $this->paynet_id($O) ])); }
 
-		private function paynet_order_id(object $O): string {
-			global $wpdb;
-			return $wpdb->get_var("SELECT paynet_order_id FROM {$wpdb->prefix}payneteasy_payments WHERE merchant_order_id={$O->get_id()} ORDER BY id DESC LIMIT 1");
+		private function paynet_id(object $O): string
+			{ return (string)$O->get_transaction_id(); }
+
+		private function order_exception_note(object $O, PneException $e, string $extra_action=''): string {
+			$O->add_order_note(self::_T('Payneteasy gateway error #%d: %s', $e->getCode(), $e->getMessage()));
+
+			if (self::DO_RECHECK_STATUS == $extra_action) {
+				try {
+					if ($O->get_status() != ($after = $this->OrderStatus->set($O, $this->check_PaymentStatus($O))))
+						return $after;
+				}
+				catch (\Exception $e) {}
+			}
+
+			return '';
 		}
 
-		private function try_record_trans_id(array $row): void {
-			global $wpdb;
+		private static function rebill_mode(array $schedule): string {
+			return $schedule['type'] == 'every_n_days'
+				? self::_T('every %d %s', $schedule['interval'], PneApi::is_debug_mode() ? self::_T('minutes') : self::_T('days'))
+				: ($schedule['type'] == 'last_day' ? self::_T('last day of every month') : self::_T('day %d of every month', $schedule['day']));
+		}
 
-			if (false === $wpdb->insert("{$wpdb->prefix}payneteasy_payments", $row))
-				throw new PneException(self::_T('Failed to record the gateway transaction id.'), $row);
+		private static function order_description(object $O, string $prefix=''): string {
+			$currency = $O->get_currency();
+
+			return $prefix.implode(",\n", array_map(fn($item) =>
+				$item instanceof \WC_Order_Item_Product
+					? 'item #'.($item->get_variation_id() ?: $item->get_product_id())." \"{$item->get_name()}\" x {$item->get_quantity()}: {$item->get_total()} $currency"
+					: ($item instanceof \WC_Order_Item_Coupon
+						? "{$item->get_type()}: {$item->get_code()}, discount: {$item->get_discount()} $currency"
+						: "{$item->get_type()}: {$item->get_name()}, total: {$item->get_total()} $currency"),
+				$O->get_items(['line_item', 'fee', 'shipping', 'coupon'])));
 		}
 
 		private static function admin_notice_success($message)
-			{ WC_Admin_Notices::add_custom_notice('payneteasy_ajax', $message); }
+			{ update_option('pne_admin_notice_info', [ 'success', $message ]); }
 
 		private static function admin_notice_info($message)
-			{ update_option('pne_admin_notice_info', $message); }
-
-		private static function add_exception_note(object $O, PneException $e): void
-			{ $O->add_order_note(self::_T('Payneteasy gateway error #%d: %s', $e->getCode(), $e->getMessage())); }
+			{ update_option('pne_admin_notice_info', [ 'info', $message ]); }
 
 		private static function parse_amount($amount): float
 			{ return floatval(str_replace([' ', ','], ['', '.'], $amount)); }
@@ -515,9 +678,8 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				[ 'IS_CAPTURE_MANUAL?', 'Manual capture', [ 'Automatic capture', 'Manual capture' ], 'Enable manual capture' ],
 				[ 'IS_SSN_REQUIRED?', 'Require CPF', [ 'CPF is not required', 'Show CPF input field at checkout page' ], 'Require Document Number (CPF)', null, 'notify_url' ],
 				[ 'notify_url', 'Notify url', 'Notify gate url', null, 'Enter notify gate url' ],
-				[ 'transaction_end', 'Successful transaction order status', 'Select the order status to be displayed after successful payment' ],
 				[ 'maintenance' ],
-				[ 'delete_data_on_uninstall?', 'Remove data on uninstall', 'Delete plugin data, including logs. Requires define(\'WC_PAYNETEASY_UNINSTALL_DATA\', true) in wp-config.php.' ] ];
+				[ 'delete_data_on_uninstall?', 'Remove data on uninstall', 'Delete plugin settings and logs. Requires define(\'WC_PAYNETEASY_UNINSTALL_DATA\', true) in wp-config.php.' ] ];
 
 			if (PneApi::is_debug_mode())
 				array_push($form_fields,
@@ -536,7 +698,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			if ('*' == substr($key, -1))
 				[ $key, $tail, $field['custom_attributes'] ] = [ chop($key, '*'), ' <span style="color:red">*</span>', [ 'required' => 'required' ] ];
 			elseif (isset($dependant))
-				$field['custom_attributes'] = [ 'data-toggle-row' => $dependant ];
+				$field['custom_attributes'] = [ 'data-toggle-dependant' => $dependant ];
 
 			if (count($def) == 1)
 				[ $type, $title, $field['class'] ] = [ 'title', ucfirst($key), 'pne-section-title' ];
@@ -551,8 +713,6 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			}
 			elseif ('description' == $key)
 				[ $type, $field['default'] ] = [ 'textarea', self::_T('Pay with Payneteasy payment') ];
-			elseif ('transaction_end' == $key)
-				[ $type, $field['default'], $field['options'] ] = [ 'select', 'wc-processing', wc_get_order_statuses() ];
 			else
 				$type = 'text';
 
@@ -590,29 +750,16 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				$months = array_combine($mm = array_map(fn($n) => sprintf('%02d', $n), range(1, 12)), $mm);
 				$years = array_combine($yy = array_map('strval', range(date('Y'), date('Y')+15)), $yy);
 
-				echo '<script>function checkLuhn(ccnS) {
-					let sum = 0; const parity = ccnS.length % 2
-					for (let i = 0; i < ccnS.length; i += 1) { let digit = Number(ccnS[i]); if (i % 2 == parity) { digit *= 2
-					if (digit > 9) { digit -= 9 } } sum += digit }
-					document.getElementById("place_order").disabled = Number(sum % 10) != 0 }</script>
-					<style>
-						#credit_card_number_field{max-width:200px;width:auto}
-						#cvv2_field{width:90px;flex:none}
-						#expire_month_field{width:140px;flex:none}
-						#expire_year_field{width:140px;flex:none}
-						#expire_month_field label,#expire_year_field label{white-space:nowrap}
-						#card_printed_name_field,#ssn_field{max-width:320px}
-						#expire_month_field select,#expire_year_field select{
-							-webkit-appearance:none;-moz-appearance:none;appearance:none;
-							padding-right:24px;
-							background-image:linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-							background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
-							background-size:5px 5px, 5px 5px;
-							background-repeat:no-repeat;
-						}</style><input type="hidden" name="pne_browser_info" id="pne-browser-info">
-						<script>document.getElementById("pne-browser-info").value = JSON.stringify(
-							[ "true", navigator.javaEnabled?.() ? "true" : "false", window.screen.colorDepth, window.screen.height, window.screen.width, new Date().getTimezoneOffset() ])</script>'
-					.self::payment_form_row(12,
+				?><input type="hidden" name="pne_browser_info" id="pne-browser-info">
+					<script>function checkLuhn(ccnS) {
+						let sum = 0; const parity = ccnS.length % 2
+						for (let i = 0; i < ccnS.length; i += 1) { let digit = Number(ccnS[i]); if (i % 2 == parity) { digit *= 2
+						if (digit > 9) { digit -= 9 } } sum += digit }
+						document.getElementById("place_order").disabled = Number(sum % 10) != 0 }
+					document.getElementById("pne-browser-info").value = JSON.stringify(
+						[ "true", navigator.javaEnabled?.() ? "true" : "false", window.screen.colorDepth, window.screen.height, window.screen.width, new Date().getTimezoneOffset() ])</script>
+				<?php
+				echo self::payment_form_row(12,
 						self::payment_form_field('credit_card_number', 'Card Number', [ 'autocomplete' => 'cc-number', 'custom_attributes' => ['onkeyup' => 'checkLuhn(this.value)'] ], $cc),
 						self::payment_form_field('cvv2', 'CVC', [ 'autocomplete' => 'off', 'minlength' => 3, 'maxlength' => 4 ], '', 'password'))
 					.self::payment_form_row(20,
@@ -629,7 +776,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		}
 
 		private static function payment_form_row(int $gap, string ...$fields): string
-			{ return '<div style="display:flex;gap:'.$gap.'px">'.implode('', $fields).'</div>'; }
+			{ return "<div style='display:flex;gap:{$gap}px'>".implode('', $fields).'</div>'; }
 
 		private static function payment_form_field(string $key, string $label, array $extra, string $value='', string $type='text'): string {
 			return woocommerce_form_field($key, array_merge([
@@ -642,7 +789,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 	}
 
 	class WC_Payneteasy_OrderStatusExpander {
-		private const CUSTOM_STATUSES = [ 'wc-chargeback' => 'Chargeback', 'wc-authorized' => 'Authorized', 'wc-void' => 'Voided' ];
+		private const CUSTOM_STATUSES = [ 'wc-chargeback' => 'Chargeback', 'wc-authorized' => 'Authorized', 'wc-void' => 'Voided', 'wc-paid' => 'Paid' ];
 
 		public static function hook_order_statuses(array $statuses): array
 			{ return array_merge($statuses, array_map(fn($label) => _x($label, 'Order status', 'woocommerce'), self::CUSTOM_STATUSES)); }
@@ -660,76 +807,108 @@ function hook_init_wc_paynet_payment_gateway(): void {
 	}
 
 	class WC_Payneteasy_OrderStatusHandler { use PneString;
-		private string $completed_status;
-		private array $status_map;
+		private array $_status_map;
 
-		function __construct(string $transaction_end, bool $is_preauth = false) {
-			$this->completed_status = str_replace('wc-', '', $transaction_end);
-
+		function __construct(bool $is_preauth) {
 			$sale_type = $is_preauth ? 'preauth' : 'sale';
-			$this->status_map = [
-				"$sale_type/approved"       => $is_preauth ? [ 'authorized', 'authorized' ] : [ 'paid', $this->completed_status ],
-				"$sale_type/processing"     => [ 'hold', 'on-hold' ],
-				"$sale_type/unknown"        => [ 'hold', 'on-hold' ],
-				"$sale_type/chain_declined" => [ 'hold', 'on-hold' ],
-				'chargeback/approved'       => [ 'chargeback', 'chargeback' ],
-				'reversal/approved'         => [ 'refunded', 'refunded' ],
-				'void/approved'             => [ 'void', 'void' ],
-				'capture/approved'          => [ 'paid', $this->completed_status ] ];
+			$this->_status_map = [
+				"$sale_type/approved"       => $is_preauth ? 'authorized' : 'paid',
+				"$sale_type/processing"     => 'on-hold',
+				"$sale_type/unknown"        => 'on-hold',
+				"$sale_type/chain_declined" => 'on-hold',
+				'cancel/approved'           => 'cancelled',
+				'void/approved'             => 'void',
+
+				'chargeback/approved' => 'chargeback',
+				'chargeback/*'        => [ 'chargeback_rejected' ],
+
+				'reversal/approved'   => 'refunded',
+				'reversal/*'          => [ 'refund_rejected' ],
+
+				'capture/approved'    => 'paid',
+				'capture/*'           => [ 'capture_rejected' ] ];
 		}
 
-		public function completed_status(): string
-			{ return $this->completed_status; }
+		private function status_map(string $payment_status, bool $unwrap=true) {
+			$entry = $this->_status_map[$payment_status] ?? $this->_status_map[strstr($payment_status, '/', true).'/*'] ?? null;
+			return is_array($entry) && $unwrap ? $entry[0] : $entry;
+		}
 
-		public function is(object $O, string $payment_status): bool
-				{ return $O->get_status() == ($this->status_map[$payment_status] ?? [ null, 'failed' ])[1]; }
+		public function is(object $O, string $payment_status): bool {
+			return ($entry = $this->status_map($payment_status, false))
+				? $O->get_status() === (is_array($entry) ? null : $entry)
+				: $O->get_status() == 'failed';
+		}
 
-		public function set(object $O, Payneteasy_PaymentResponse $Pr): string {
-			$action = $this->status_map[(string)$Pr][0] ?? 'unpaid';
+		public function set(object $O, Payneteasy_PaymentStatus $Pr): string {
+			$action = $this->status_map($Pr) ?? 'unpaid';
 
-			if ($action == 'refunded') {
-				$delta = round(($Pr->total_reversal_amount() ?? $O->get_total()) - $O->get_total_refunded(), 2);
+			switch ($action) {
+				case 'refund_rejected':
+					$amount = $Pr->total_reversal_amount();
 
-				if ($delta > 0)
-					wc_create_refund([ 'order_id' => $O->get_id(), 'amount' => $delta, 'reason' => self::_T('Reversal reported by gateway.') ]);
+					foreach ($O->get_refunds() as $Refund)
+						if (!isset($amount) || round((float)$Refund->get_amount(), 2) == round($amount, 2)) {
+							$O->add_order_note(self::_T('Gateway declined the reversal, local refund of %s removed.', $Refund->get_amount()));
+							$Refund->delete(true);
+							break ;
+						}
 
-				if ($O->get_total_refunded() < $O->get_total())
-					$action = 'partially_refunded';
+				case 'chargeback_rejected':
+				case 'capture_rejected':
+					return $O->get_status();
+
+				case 'refunded':
+						$delta = round(($Pr->total_reversal_amount() ?? $O->get_total()) - $O->get_total_refunded(), 2);
+
+						if ($delta > 0)
+							wc_create_refund([ 'order_id' => $O->get_id(), 'amount' => $delta, 'reason' => self::_T('Reversal reported by gateway.') ]);
+
+						if ($O->get_total_refunded() < $O->get_total())
+							$action = 'partially_refunded';
 			}
 
 			$map = [
-				'paid'       => [ 'Payment completed successfully.', $this->completed_status, true ],
-				'hold'       => [ 'Payment is being processed.', 'on-hold' ],
-				'unpaid'     => [ 'Payment not paid.', 'failed', null, 'Payment not paid. Your order has been canceled.', 'error' ],
+				'paid'       => [ 'Payment completed successfully.', null, true ],
+				'on-hold'    => [ 'Payment is being processed.', 'on-hold' ],
+				'unpaid'     => [ 'Payment not paid.', 'failed', null, 'Payment not paid. Your order has been cancelled.', 'error' ],
 				'authorized' => [ 'Payment authorized, awaiting capture.' ],
+				'cancelled'  => [ 'Payment cancelled.', null, null, 'The payment was cancelled.' ],
 				'void'       => [ 'Void of payment.', null, null, 'The payment was voided.' ],
 				'refunded'   => [ 'Refund of payment.', null, null, 'The payment was refunded.' ],
 				'chargeback' => [ 'Chargeback of payment.', null, null, 'The payment was charged back.' ],
 				'partially_refunded'
-				             => [ 'Partial refund of payment.', $this->completed_status, null, 'The payment was partially refunded.' ] ];
+				             => [ 'Partial refund of payment.', 'paid', null, 'The payment was partially refunded.', null, true ] ];
 
-			[ $text, $status, $extra_actions, $notice, $notice_t ] = array_pad($map[$action], 5, null);
+			[ $text, $status, $extra_actions, $notice, $notice_type, $at_least ] = array_pad($map[$action], 6, null);
 
 			if ($O->get_status() != ($set = $status ?? $action)) {
 				$O->update_status($set, self::_T($text));
 
 				if (isset($extra_actions))
-					$this->{'extra_actions_for_'.$action}($O);
+					$this->{'extra_actions_for_'.$action}($O, $Pr);
 			}
+			elseif ($at_least ?? false)
+				$O->add_order_note(self::_T($text));
 
 			if (isset($notice))
-				wc_add_notice(self::_T($notice), $notice_t ?? 'notice');
+				wc_add_notice(self::_T($notice), $notice_type ?? 'notice');
 
 			return $set;
 		}
 
-		private function extra_actions_for_paid(object $O): void {
+		private function extra_actions_for_paid(object $O, Payneteasy_PaymentStatus $Pr): void {
 			$O->payment_complete();
 			wc_reduce_stock_levels($O->get_id());
+
+			if ($details = $Pr->payment_details()) {
+				$O->update_meta_data('_payneteasy_payment_details', $details);
+				$O->save();
+			}
 		}
 	}
 
-	class Payneteasy_PaymentResponse {
+	class Payneteasy_PaymentStatus {
 		private array $response;
 
 		function __construct(array $response)
@@ -748,29 +927,20 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			{ return isset($this->response['total-reversal-amount']) ? (float)$this->response['total-reversal-amount'] : null; }
 
 		public function is_processing(): bool
-			{ return '/processing' == substr($this, -11); }
+			{ return 'processing' == ($this->response['status'] ?? ''); }
+
+		public function payment_details(): array {
+			return array_filter([
+				'rrn' => $this->response['processor-rrn'] ?? null,
+				'card_type' => $this->response['card-type'] ?? null,
+				'card_last4' => $this->response['last-four-digits'] ?? null,
+				'approval_code' => $this->response['approval-code'] ?? null ]);
+		}
 	}
 }
 
-function hook_activate_wc_paynet_payment_gateway(): void {
-	global $wpdb;
-
-	$charset_collate = $wpdb->get_charset_collate();
-
-	$sql = "CREATE TABLE {$wpdb->prefix}payneteasy_payments (
-		`id` int(11) NOT NULL AUTO_INCREMENT,
-		`paynet_order_id` int(11) NOT NULL,
-		`merchant_order_id` int(11) NOT NULL,
-		PRIMARY KEY (id),
-		KEY merchant_order_id (merchant_order_id)
-	) $charset_collate";
-
-	require_once(ABSPATH.'wp-admin/includes/upgrade.php');
-	dbDelta($sql);
-}
-
 function hook_uninstall_wc_paynet_payment_gateway(): void {
-	if ((get_option('woocommerce_wc_payneteasy_settings')['delete_data_on_uninstall'] ?? '') == 'yes'
+	if ('yes' == (get_option('woocommerce_wc_payneteasy_settings')['delete_data_on_uninstall'] ?? '')
 			&& defined('WC_PAYNETEASY_UNINSTALL_DATA')
 			&& true === WC_PAYNETEASY_UNINSTALL_DATA) {
 		[ $prefix, $suffix ] = [ PNE_PLUGIN_ID.'-', '-'.wp_hash(PNE_PLUGIN_ID).'.log' ];
@@ -779,8 +949,6 @@ function hook_uninstall_wc_paynet_payment_gateway(): void {
 			if (substr($f, 0, strlen($prefix)) === $prefix && substr($f, -strlen($suffix)) === $suffix)
 				@unlink(WC_LOG_DIR.$f);
 
-		global $wpdb;
-		$wpdb->query("DROP TABLE IF EXISTS {$wpdb->prefix}payneteasy_payments");
 		delete_option('woocommerce_wc_payneteasy_settings');
 	}
 }
@@ -805,7 +973,7 @@ function hook_register_wc_payneteasy_blocks_support(): void {
 
 		public function get_payment_method_data(): array {
 			return [
-				'icon' => PNE_PLUGIN_URL.'payneteasy.png',
+				'icon' => PNE_PLUGIN_URL.'assets/img/payneteasy.png',
 				'title' => $this->get_setting('title'),
 				'IS_FORM' => $this->get_setting('IS_FORM') == 'yes',
 				'supports' => $this->get_supported_features(),

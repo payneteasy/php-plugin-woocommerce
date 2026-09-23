@@ -1,0 +1,31 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build zip
+        run: |
+          dir_name=$(ls -d */ | grep -v '^installation/$' | sed 's#/##')
+          echo "dir_name=$dir_name" >> "$GITHUB_ENV"
+          zip -r "${dir_name}.zip" "$dir_name"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            "${{ env.dir_name }}.zip" \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes

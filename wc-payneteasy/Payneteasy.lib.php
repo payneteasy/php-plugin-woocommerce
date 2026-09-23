@@ -213,7 +213,7 @@ namespace Payneteasy {
 		public const DEBUG_FAKE_REQUESTS = 0b10;
 
 		private const USERAGENT = 'Payneteasy-Client/2.0';
-		private const DEBUG_MODE = false; # this is used to show admin controls (or do SetEnv DEBUG_MODE 1) in devel environment
+		private const DEBUG_MODE = false; # this is used to show admin controls (or do SetEnv DEBUG_HOST something) in devel environment
 
 		private string $gate, $login, $control_key, $end_point;
 		private bool $is_form, $is_multicurr, $is_preauth;
@@ -232,7 +232,10 @@ namespace Payneteasy {
 		}
 
 		public static function is_debug_mode(): bool
-			{ return self::DEBUG_MODE || ($_SERVER['DEBUG_MODE'] ?? false); }
+			{ return self::DEBUG_MODE || ($_SERVER['DEBUG_HOST'] ?? false); }
+
+		public static function debug_host(): ?string
+			{ return $_SERVER['DEBUG_HOST'] ?? null; }
 
 		public static function call_logger($arg, bool $as_error=true): void {
 			if (isset(self::$Logger) && !empty($arg))
@@ -285,7 +288,7 @@ namespace Payneteasy {
 		public function log_info($arg): void
 			{ self::call_logger($arg, PneLogger::AS_INFO); }
 
-		public function verify_callback(array $params): bool
+		public function verify_callback_signature(array $params): bool
 			{ return hash_equals(sha1(($params['status'] ?? '').($params['orderid'] ?? '').($params['client_orderid'] ?? '').$this->control_key), $params['control'] ?? ''); }
 
 		public function sale(array $data, string $browser_info=''): array {
@@ -302,27 +305,28 @@ namespace Payneteasy {
 			$action = ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : '');
 
 			return $this->execute($action,
-				$this->signed($data, "{$this->end_point}{$data['client_orderid']}".($data['amount'] * 100)."{$data['email']}{$this->control_key}", false));
+				$this->signed($data, $this->end_point.$data['client_orderid'].($data['amount'] * 100).$data['email'].$this->control_key, false));
 		}
 
 		public function void(array $data): array
 			{ return $this->execute('void', $this->signed($data)); }
 
 		public function return(array $data): array
-			{ return $this->execute('return', $this->signed($data, "{$this->login}{$data['client_orderid']}{$data['orderid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}")); }
+			{ return $this->execute('return', $this->signed($data, $this->login.$data['client_orderid'].$data['orderid'].($data['amount'] * 100).$data['currency'].$this->control_key)); }
 
 		public function capture(array $data): array {
 			return $this->execute('capture', $this->signed($data,
-				isset($data['amount']) ? "{$this->login}{$data['client_orderid']}{$data['orderid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}" : null));
+				isset($data['amount']) ? $this->login.$data['client_orderid'].$data['orderid'].($data['amount'] * 100).$data['currency'].$this->control_key : null));
 		}
 
 		public function make_rebill(array $data): array {
-			return $this->execute('make-rebill-sale', $this->signed($data += [ 'recurrent_scenario' => 'REGULAR', 'recurrent_initiator' => 'MERCHANT' ],
-				"{$this->login}{$data['client_orderid']}{$data['cardrefid']}".($data['amount'] * 100)."{$data['currency']}{$this->control_key}"));
+			return $this->execute('make-rebill-'.($this->is_preauth ? 'preauth' : 'sale'),
+				$this->signed($data += [ 'recurrent_scenario' => 'REGULAR', 'recurrent_initiator' => 'MERCHANT' ],
+					$this->login.$data['client_orderid'].$data['cardrefid'].($data['amount'] * 100).$data['currency'].$this->control_key));
 		}
 
 		public function get_card_info(array $data): array
-			{ return $this->execute('get-card-info', $this->signed($data, "{$this->login}{$data['cardrefid']}{$this->control_key}")); }
+			{ return $this->execute('get-card-info', $this->signed($data, $this->login.$data['cardrefid'].$this->control_key)); }
 
 		public function status(array $data): array
 			{ return $this->execute('status', $this->signed($data)); }
@@ -334,7 +338,90 @@ namespace Payneteasy {
 			if ($add_login)
 				$data['login'] = $this->login;
 
-			return array_merge($data, ['control' => sha1($str ?? "{$this->login}{$data['client_orderid']}{$data['orderid']}{$this->control_key}")]);
+			return array_merge($data, ['control' => sha1($str ?? $this->login.$data['client_orderid'].$data['orderid'].$this->control_key)]);
+		}
+
+		private function fake_callback(string $url, array $params): void {
+			$params['control'] = sha1($params['status'].$params['orderid'].$params['client_orderid'].$this->control_key);
+
+			$Curl = curl_init("$url&".http_build_query($params));
+			curl_setopt_array($Curl, [ CURLOPT_RETURNTRANSFER => 1, CURLOPT_TIMEOUT => 5 ]);
+			curl_exec($Curl);
+			curl_close($Curl);
+		}
+
+		private function fake_response(string $action, array $data): array {
+			if ((string)($data['cvv2'] ?? '') != '321') {
+				# 0/1/2/3
+				$forced_type = [null,'reversal','chargeback','void'][substr((string)($data['orderid'] ?? ''), -4, 1)] ?? null;
+
+				# test-orderid suffix picks the fake response, like a gateway's test card numbers:
+				# 995/996/997 => 3DS processing (redirect / html / plugin's own ticker fallback)
+				$suffix = substr((string)($data['orderid'] ?? ''), -3);
+				$fake_status = [
+						'989' => 'error',
+						'990' => 'filtered',
+						'991' => 'unknown',
+						'992' => 'error',
+						'993' => 'declined',
+						'994' => 'chain_declined',
+						'995' => 'processing',
+						'996' => 'processing',
+						'997' => 'processing' ][$suffix]
+					?? 'approved';
+
+				if ($suffix === '992')
+					throw new PneException('Fake gateway error (test orderid suffix 992)', $data, [], [], 12);
+
+				$fake = [
+					'return|void' => [ 'status' => $fake_status ],
+					'sale-form|preauth-form' => [ 'type' => 'async-form-response' ],
+					'make-rebill-sale|make-rebill-preauth|preauth|capture|sale' => [ 'type' => 'async-response' ],
+
+					'create-card-ref' => [ 'type' => 'create-card-ref-response', 'card-ref-id' => 'fake-card-ref-id' ],
+
+					'get-card-info'    => [
+						'bin'               => '444455',
+						'type'              => 'get-card-info-response',
+						'expire-year'       => (string)(date('Y') + 2),
+						'expire-month'      => '12',
+						'last-four-digits'  => '1111',
+						'card-printed-name' => 'FAKE TEST CARD' ],
+
+					'status' => array_filter([
+						'status'           => $fake_status,
+						'html'             => $suffix == '996' ? '<div>fake 3ds html</div>' : null,
+						'card-type'        => $fake_status == 'approved' ? 'VISA' : null,
+						'redirect-to'      => $suffix == '997' ? 'https://example.test/fake-3ds-redirect' : null,
+						'approval-code'    => $fake_status == 'approved' ? 'FAKE01' : null,
+						'processor-rrn'    => $fake_status == 'approved' ? 'fake-rrn-123456' : null,
+						'last-four-digits' => $fake_status == 'approved' ? '1111' : null,
+						'transaction-type' => $forced_type ?? ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : '') ]) ];
+			}
+			else
+				$fake = [
+					'sale' => [ 'type' => 'async-response' ],
+					'status' => [
+						'status'           => 'approved',
+						'card-type'        => 'VISA',
+						'approval-code'    => 'FAKE01',
+						'processor-rrn'    => 'fake-rrn-123456',
+						'transaction-type' => 'sale',
+						'last-four-digits' => '1111' ] ];
+
+			$response = array_merge(self::array_pick($fake, $action), [
+				'merchant-order-id' => $data['client_orderid'],
+				'serial-number'     => '00000000-0000-0000-0000-000000000000',
+				'paynet-order-id'   => $paynet_id = (int)substr_replace((string)time(), '0', -4, 1) ]);
+
+			if (($response['type'] ?? '') == 'async-response' && !empty($data['server_callback_url']))
+				register_shutdown_function(fn() => $this->fake_callback($data['server_callback_url'], [
+					'orderid'        => $paynet_id,
+					'status'         => $fake_status ?? 'approved',
+					'client_orderid' => $data['client_orderid'],
+					'type'           => [ 'preauth' => 'preauth', 'capture' => 'capture', 'make-rebill-preauth' => 'preauth' ][$action] ?? 'sale' ]));
+
+			return $response;
 		}
 
 		private function execute(string $action, array $data, string $api='/api/v2'): array {
@@ -345,42 +432,8 @@ namespace Payneteasy {
 				trace($data, ' -> ');
 			}
 
-			if ($this->debug_flags & self::DEBUG_FAKE_REQUESTS) {
-					# 0/1/2/3
-					$forced_type = [null,'reversal','chargeback','void'][substr((string)($data['orderid'] ?? ''), -4, 1)] ?? null;
-
-				# test-orderid suffix picks the fake response, like a gateway's test card numbers:
-				# 995/996/997 => 3DS processing (redirect / html / plugin's own ticker fallback)
-				$suffix = substr((string)($data['orderid'] ?? ''), -3);
-				$fake_status = [
-					'991' => 'unknown',
-					'992' => 'error',
-					'993' => 'declined',
-					'994' => 'chain_declined',
-					'995' => 'processing',
-					'996' => 'processing',
-					'997' => 'processing' ][$suffix] ?? 'approved';
-
-				if ($fake_status === 'error')
-					throw new PneException('Fake gateway error (test orderid suffix 992)', $data, [], [], 12);
-
-				$fake = [
-					'make-rebill-sale' => [ 'type' => 'async-response' ],
-					'preauth'          => [ 'type' => 'async-response' ],
-					'capture'          => [ 'type' => 'async-response' ],
-					'sale'             => [ 'type' => 'async-response' ],
-					'sale-form'        => [ 'type' => 'async-form-response' ],
-					'preauth-form'     => [ 'type' => 'async-form-response' ],
-					'return'           => [ 'status' => $fake_status ],
-					'void'             => [ 'status' => $fake_status ],
-					'create-card-ref'  => [ 'type' => 'create-card-ref-response', 'card-ref-id' => 'fake-card-ref-id' ],
-					'get-card-info'    => [ 'type' => 'get-card-info-response', 'card-printed-name' => 'FAKE TEST CARD',
-						'bin' => '444455', 'last-four-digits' => '1111', 'expire-year' => (string)(date('Y') + 2), 'expire-month' => '12' ],
-					'status' => array_filter([ 'status' => $fake_status, 'transaction-type' => $forced_type ?? ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : ''),
-						'redirect-to' => $suffix == '997' ? 'https://example.test/fake-3ds-redirect' : null, 'html' => $suffix == '996' ? '<div>fake 3ds html</div>' : null ]) ];
-
-				return array_merge($fake[$action], [ 'merchant-order-id' => $data['client_orderid'], 'paynet-order-id' => time(), 'serial-number' => '00000000-0000-0000-0000-000000000000' ]);
-			}
+			if ($this->debug_flags & self::DEBUG_FAKE_REQUESTS)
+				return $this->fake_response($action, $data);
 
 			$Curl = curl_init($url);
 			curl_setopt_array($Curl, [
@@ -418,29 +471,31 @@ namespace Payneteasy {
 			}
 
 			$success_types = [
-				'status'           => 'status-response',
-				'make-rebill-sale' => 'async-response',
-				'return'           => 'async-response',
-				'void'             => 'async-response',
-				'sale'             => 'async-response',
-				'preauth'          => 'async-response',
-				'capture'          => 'async-response',
-				'preauth-form'     => 'async-form-response',
-				'sale-form'        => 'async-form-response',
-				'create-card-ref'  => 'create-card-ref-response',
-				'get-card-info'    => 'get-card-info-response' ];
+				'status' => 'status-response',
+				'preauth-form|sale-form' => 'async-form-response',
+				'make-rebill-sale|make-rebill-preauth|return|void|sale|preauth|capture' => 'async-response',
 
-			$type = $result['type'] ?? '';
+				'create-card-ref'     => 'create-card-ref-response',
+				'get-card-info'       => 'get-card-info-response' ];
 
-			if (in_array($type, [ 'validation-error', 'error' ]) || ($result['status'] ?? '') == 'error')
+			if (in_array(($type = $result['type'] ?? ''), [ 'validation-error', 'error' ]) || ($result['status'] ?? '') == 'error')
 				throw new PneException('Card processing returned error: "'.($result['error_message'] ?? $result['error-message'] ?? '').'"',
 					$data, $result, [ 'URL' => $url ],
 					(int)($result['error_code'] ?? $result['error-code'] ?? 0));
 
-			if ($type !== $success_types[$action])
-				throw new PneException("Card processing returned unexpected response type: '$type', expected '{$success_types[$action]}'", $data, $result, [ 'URL' => $url ]);
+			if ($type !== ($action_type = self::array_pick($success_types, $action)))
+				throw new PneException("Card processing returned unexpected response type: '$type', expected '$action_type'", $data, $result, [ 'URL' => $url ]);
 
 			return $result;
+		}
+
+		private static function array_pick(array $arr, string $key) {
+			if (array_key_exists($key, $arr))
+				return $arr[$key];
+
+			foreach ($arr as $k => $v)
+				if (false !== strpos($k, '|') && in_array($key, explode('|', $k)))
+					return $v;
 		}
 	}
 }

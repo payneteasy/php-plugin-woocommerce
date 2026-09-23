@@ -1,9 +1,22 @@
 .order-status.status-authorized { background:#E2E8F5; color:#3D5A80 }
+.order-status.status-paid { background:#DED; color:#3D5A80 }
 .order-status.status-void { background:#FBE4E6; color:#A13B46 }
 .order-status.status-refunded { background:#F5C2C7; color:#842029 }
 .order-status.status-chargeback { background:#DC3545; color:#FFF }
 
-.pne-check-status-wrap { display:inline-block }
-.pne-transaction-id { display:block; text-align:center }
+.pne-transaction-id { display:block }
 
 .notice-info { background-color:#DDF }
+
+.pne-rebill-info { display:block; line-height:1.6 }
+.pne-rebill-mode { font-size:11px }
+#order_data { position:relative }
+#payneteasy-order-actions { position:absolute; right:23px; bottom:12px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:0 12px }
+#payneteasy-order-actions p.pne-action { margin:0; text-align:center }
+#payneteasy-order-actions p.pne-action-rebill { order:1 }
+#payneteasy-order-actions .notice { flex-basis:100% }
+#payneteasy-rebill-warning { color:#A00 }
+#payneteasy-rebill-interval { width:60px }
+#payneteasy-capture-amount { width:80px }
+.wc-backbone-modal-main footer .inner.pne-capture-footer { justify-content:flex-end }
+label[for=payneteasy-rebill-start] { display:inline-block; margin-right:8px }

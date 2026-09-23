@@ -1,0 +1,14 @@
+#credit_card_number_field { max-width:200px; width:auto }
+#cvv2_field { width:90px; flex:none }
+#expire_month_field { width:140px; flex:none }
+#expire_year_field { width:140px; flex:none }
+#expire_month_field label,#expire_year_field label { white-space:nowrap }
+#card_printed_name_field,#ssn_field { max-width:320px }
+#expire_month_field select,#expire_year_field select {
+	-webkit-appearance:none; -moz-appearance:none; appearance:none;
+	padding-right:24px;
+	background-image:linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+	background-position: calc(100% - 14px) 55%, calc(100% - 9px) 55%;
+	background-size:5px 5px, 5px 5px;
+	background-repeat:no-repeat
+}

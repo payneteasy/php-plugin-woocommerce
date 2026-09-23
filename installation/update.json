@@ -2,7 +2,7 @@
 	"name": "Payneteasy online card payment system",
 	"slug": "wc-payneteasy",
 	"author": "<a href='https://payneteasy.com/'>Payneteasy</a>",
-	"version": "1.6.0",
+	"version": "1.6.1",
 	"requires": "6.6",
 	"tested": "7.1.1",
 	"requires_php": "7.4",

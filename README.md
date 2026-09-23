@@ -1,13 +1,13 @@
 # Plugin for WordPress with WooCommerce
 
-tested on WordPress 7.1.1, 7.0.4, 6.9.1, 6.8.3, 6.6.  
-with WooCommerce 11.0.1, 10.5.2, 9.5.1, 9.3.4, 8.7.0, 7.1.2.
+tested on WordPress 7.1.2, 7.0.4, 6.9.1, 6.8.3, 6.6.  
+with WooCommerce 11.1.2, 10.5.2, 9.5.1, 9.3.4, 8.7.0, 7.1.2.
 
 # Installation and configuration
 
 1. In admin section "Plugins" click "Add Plugin"<br><img src="installation/1.png" alt="plugin installation step 1" width="450"/>
 2. On next page click "Upload plugin"
-3. Then "Select file" <a href="https://github.com/payneteasy/php-plugin-woocommerce/releases/download/v1.6.1/wc-payneteasy-v1.6.1.zip">wc-payneteasy-v1.6.1.zip</a>
+3. Then "Select file" <a href="https://github.com/payneteasy/php-plugin-woocommerce/releases/download/v1.6.1/wc-payneteasy.zip">wc-payneteasy.zip</a>
 4. And "Install now"<br><img src="installation/2-4.png" alt="plugin installation steps 2-4, installing plugin" width="450"/>
 5. On next page click "Activate plugin"<br><img src="installation/5.png" alt="plugin installation step 5, activation" width="450"/>
 6. After installation completed, on plugins page, click "Settings"<br><img src="installation/6.png" alt="plugin installation step 6, following to configuration" width="450"/>

@@ -8,15 +8,10 @@
 
 .notice-info { background-color:#DDF }
 
-.pne-rebill-info { display:block; line-height:1.6 }
-.pne-rebill-mode { font-size:11px }
 #order_data { position:relative }
-#payneteasy-order-actions { position:absolute; right:23px; bottom:12px; display:flex; flex-wrap:wrap; align-items:flex-end; gap:0 12px }
-#payneteasy-order-actions p.pne-action { margin:0; text-align:center }
-#payneteasy-order-actions p.pne-action-rebill { order:1 }
-#payneteasy-order-actions .notice { flex-basis:100% }
-#payneteasy-rebill-warning { color:#A00 }
-#payneteasy-rebill-interval { width:60px }
+#payneteasy-order-actions { position:absolute; right:23px; bottom:12px; width:max-content; display:flex; flex-wrap:wrap; align-items:flex-end }
+#payneteasy-order-actions > p { margin:0; text-align:center }
+#payneteasy-order-actions > .pne-action ~ .pne-action { margin-left:12px }
+#payneteasy-order-actions .notice { position:absolute; bottom:100%; right:0; width:max-content; margin:0 0 8px; transition:opacity 3s ease-in }
 #payneteasy-capture-amount { width:80px }
 .wc-backbone-modal-main footer .inner.pne-capture-footer { justify-content:flex-end }
-label[for=payneteasy-rebill-start] { display:inline-block; margin-right:8px }

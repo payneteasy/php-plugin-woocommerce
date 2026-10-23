@@ -1,4 +1,11 @@
 <?php
+/**
+ *  @author    Payneteasy
+ *  @copyright 2007-2026 Payneteasy
+ *  @license   Property of Payneteasy
+ */
+
+declare(strict_types=1);
 
 namespace WC_Payneteasy;
 
@@ -57,7 +64,7 @@ class SelfUpdater {
 		return $C;
 	}
 
-	private static function update_url(string $plg_ver=null): string {
+	private static function update_url(?string $plg_ver=null): string {
 		if ($host = PneApi::debug_host())
 			return $plg_ver
 				? "http://$host/".PNE_PLUGIN_SLUG.'.zip' # "-v$plg_ver.zip"

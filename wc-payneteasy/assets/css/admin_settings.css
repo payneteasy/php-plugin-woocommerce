@@ -1,1 +1,6 @@
 .pne-section-title { display:inline-block; width:20%; background:#FFF; border-left:4px solid #2271B1; padding:8px 12px; margin:24px 0 8px }
+.form-table tr:has(input[required][id^=woocommerce_wc_payneteasy_]) > th label::after { content:' *'; color:red }
+form:has(#woocommerce_wc_payneteasy_IS_LIVE:checked) tr:has([id^=woocommerce_wc_payneteasy_SANDBOX_]),
+form:has(#woocommerce_wc_payneteasy_IS_LIVE:not(:checked)) tr:has([id^=woocommerce_wc_payneteasy_LIVE_]),
+form:has(#woocommerce_wc_payneteasy_IS_PREAUTH:not(:checked)) tr:has(#woocommerce_wc_payneteasy_IS_CAPTURE_MANUAL),
+form:has(#woocommerce_wc_payneteasy_IS_SSN_REQUIRED:not(:checked)) tr:has(#woocommerce_wc_payneteasy_notify_url) { display:none }

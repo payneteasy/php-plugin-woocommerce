@@ -1,3 +1,5 @@
+div:has(> #credit_card_number_field),div:has(> #expire_month_field) { display:flex; gap:12px }
+div:has(> #expire_month_field) { gap:20px }
 #credit_card_number_field { max-width:200px; width:auto }
 #cvv2_field { width:90px; flex:none }
 #expire_month_field { width:140px; flex:none }

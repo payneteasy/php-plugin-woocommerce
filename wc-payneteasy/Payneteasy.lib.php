@@ -8,7 +8,7 @@
 declare(strict_types=1);
 
 namespace Payneteasy {
-	function trace($arg, string $prefix='', array &$json=null): void {
+	function trace($arg, string $prefix='', ?array &$json=null): void {
 		if (is_object($arg))
 			$arg = get_object_vars($arg);
 
@@ -29,6 +29,9 @@ namespace Payneteasy {
 			$json[] = $arg;
 	}
 
+	function def_val($key)
+		{ return defined($key) ? constant($key) : null; }
+
 	class PneException extends \Exception {
 		public function __construct(string $message, $a1=null, $a2=null, $hdr=null, int $code=0) {
 			parent::__construct($message, $code, null);
@@ -48,9 +51,11 @@ namespace Payneteasy {
 				}
 			}
 
-			PneApi::call_logger($json);
+			PneApi::log_error($json);
 		}
 	}
+
+	class PneTransportException extends PneException {}
 
 	class PneConfigException extends \Exception {
 		public function __construct(string $message, bool $verbose) {
@@ -116,8 +121,14 @@ namespace Payneteasy {
 			return $new;
 		}
 
-		public function __get(string $k)
-			{ return $this->cfg[ $this->allowed_key($k) ][0] ?? ''; }
+		public function __get(string $k) {
+			$val = $this->cfg[ $this->allowed_key($k) ][0] ?? '';
+
+			if (0 === strpos($k, 'IS_'))
+				return (bool)$val;
+
+			return $val;
+		}
 
 		public function __set(string $k, string $v) {
 			if (null != ($re = ($this->cfg[ $this->allowed_key($k) ][1] ?? null)))
@@ -188,14 +199,14 @@ namespace Payneteasy {
 
 	class PneLogger {
 		# cuz no enums
-		public const AS_ERROR = true;
-		public const AS_INFO = false;
+		public const AS_ERROR = 'as_error';
+		public const AS_INFO = 'as_info';
 
 		private $on_log_error, $on_log_info;
 
 		private function __construct() {}
 
-		public static function as_plaintext(callable $on_log_error, callable $on_log_info=null): PneLogger {
+		public static function as_plaintext(callable $on_log_error, ?callable $on_log_info=null): PneLogger {
 			$new = new self();
 
 			[ $new->on_log_error, $new->on_log_info ] = [ $on_log_error, $on_log_info ?? $on_log_error ];
@@ -203,8 +214,8 @@ namespace Payneteasy {
 			return $new;
 		}
 
-		public function send_log_entry($arg, bool $as_error): void
-			{ ($as_error ? $this->on_log_error : $this->on_log_info)($arg); }
+		public function send_log_entry($arg, string $level): void
+			{ (self::AS_ERROR == $level ? $this->on_log_error : $this->on_log_info)($arg); }
 	}
 
 	class PneApi {
@@ -220,13 +231,13 @@ namespace Payneteasy {
 		private int $debug_flags;
 		private static ?PneLogger $Logger;
 
-		public function __construct(PneConfig $Cfg, PneLogger $Logger=null) {
+		public function __construct(PneConfig $Cfg, ?PneLogger $Logger=null) {
 			[ $this->gate, $this->login, $this->control_key, $this->end_point ]
 				= array_map(fn($k) => $Cfg->{($Cfg->IS_LIVE ? 'LIVE_' : 'SANDBOX_').$k}, ['URL','LOGIN','CONTROL_KEY','END_POINT']);
 
 			[ $this->is_form, $this->is_multicurr, $this->is_preauth, $this->debug_flags ]
-				= [ (bool)$Cfg->IS_FORM, (bool)$Cfg->IS_MULTICURR, (bool)$Cfg->IS_PREAUTH,
-					self::is_debug_mode() ? ((int)$Cfg->IS_DEBUG_TRACE + (int)$Cfg->IS_DEBUG_FAKE * self::DEBUG_FAKE_REQUESTS) : 0 ];
+				= [ $Cfg->IS_FORM, $Cfg->IS_MULTICURR, $Cfg->IS_PREAUTH,
+					self::is_debug_mode() ? ($Cfg->IS_DEBUG_TRACE + $Cfg->IS_DEBUG_FAKE * self::DEBUG_FAKE_REQUESTS) : 0 ];
 
 			self::$Logger = $Logger;
 		}
@@ -237,10 +248,11 @@ namespace Payneteasy {
 		public static function debug_host(): ?string
 			{ return $_SERVER['DEBUG_HOST'] ?? null; }
 
-		public static function call_logger($arg, bool $as_error=true): void {
-			if (isset(self::$Logger) && !empty($arg))
-				self::$Logger->send_log_entry(is_array($arg) ? json_encode($arg, JSON_INVALID_UTF8_SUBSTITUTE) : $arg, $as_error);
-		}
+		public static function log_error($arg): void
+			{ self::call_logger($arg, PneLogger::AS_ERROR); }
+
+		public static function log_info($arg): void
+			{ self::call_logger($arg, PneLogger::AS_INFO); }
 
 		public static function got_upgrade(string $repo, string $curr_ver, string $stored_ver_date, callable $on_upd): bool {
 			if ($stored_ver_date == "$curr_ver ".date('Y-m-d')) # check is daily
@@ -251,7 +263,7 @@ namespace Payneteasy {
 			if ($stored_ver && $stored_ver != $curr_ver)
 				return true;
 
-			$Curl = curl_init($url = sprintf('https://api.github.com/repos/%s/releases/latest', $repo));
+			$Curl = curl_init(sprintf(($host = self::debug_host()) ? "http://$host/%s" : 'https://api.github.com/repos/%s/releases/latest', $repo));
 			curl_setopt_array($Curl, [ CURLOPT_USERAGENT => self::USERAGENT, CURLOPT_RETURNTRANSFER => 1, CURLOPT_CONNECTTIMEOUT => 10 ]);
 
 			$response = curl_exec($Curl);
@@ -268,12 +280,12 @@ namespace Payneteasy {
 
 			curl_close($Curl);
 
-			if (!preg_match('/\bv?(?:\d+\.){1,2}\d+$/', ($tag = array_reverse(preg_split('/ +/', (json_decode($response, true)['name'])))[0]), $match))
+			if (!preg_match('/\bv?((?:\d+\.){1,2}\d+)$/', ($tag = array_reverse(preg_split('/ +/', (json_decode($response, true)['name'])))[0]), $match))
 				throw new PneException("Version tag is malformed: '$tag'");
 
-			$on_upd($match[0].' '.date('Y-m-d'));
+			$on_upd($match[1].' '.date('Y-m-d'));
 
-			return version_compare($match[0], $curr_ver, '>');
+			return version_compare($match[1], $curr_ver, '>');
 		}
 
 		public function is_auth_valid(): bool
@@ -282,26 +294,10 @@ namespace Payneteasy {
 		public function is_form(): bool
 			{ return (bool)$this->is_form; }
 
-		public function log_error($arg): void
-			{ self::call_logger($arg, PneLogger::AS_ERROR); }
-
-		public function log_info($arg): void
-			{ self::call_logger($arg, PneLogger::AS_INFO); }
-
 		public function verify_callback_signature(array $params): bool
 			{ return hash_equals(sha1(($params['status'] ?? '').($params['orderid'] ?? '').($params['client_orderid'] ?? '').$this->control_key), $params['control'] ?? ''); }
 
-		public function sale(array $data, string $browser_info=''): array {
-			if (defined('PNE_SEND_BROWSER_INFO')) {
-				$data[($prefix = 'customer_browser_').'info'] = 'true';
-
-				foreach ([ 'ACCEPT' => 'accept_header', 'USER_AGENT' => 'user_agent', 'ACCEPT_LANGUAGE' => 'accept_language' ] as $in => $out)
-					$data[$prefix.$out] = substr($_SERVER["HTTP_$in"], 0, $in == 'ACCEPT_LANGUAGE' ? 8 : 2048);
-
-				$data += array_combine(array_map(fn($k) => $prefix.$k, explode(' ', 'javascript_enabled java_enabled color_depth screen_height screen_width time_zone')),
-					json_decode($browser_info));
-			}
-
+		public function sale(array $data): array {
 			$action = ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : '');
 
 			return $this->execute($action,
@@ -334,7 +330,7 @@ namespace Payneteasy {
 		public function create_card_ref(array $data): array
 			{ return $this->execute('create-card-ref', $this->signed($data)); }
 
-		private function signed(array $data, string $str=null, bool $add_login=true): array {
+		private function signed(array $data, ?string $str=null, bool $add_login=true): array {
 			if ($add_login)
 				$data['login'] = $this->login;
 
@@ -373,6 +369,9 @@ namespace Payneteasy {
 				if ($suffix === '992')
 					throw new PneException('Fake gateway error (test orderid suffix 992)', $data, [], [], 12);
 
+				if ($suffix === '500')
+					throw new PneTransportException('Fake transport error (test orderid suffix 500)', $data);
+
 				$fake = [
 					'return|void' => [ 'status' => $fake_status ],
 					'sale-form|preauth-form' => [ 'type' => 'async-form-response' ],
@@ -410,15 +409,15 @@ namespace Payneteasy {
 						'last-four-digits' => '1111' ] ];
 
 			$response = array_merge(self::array_pick($fake, $action), [
-				'merchant-order-id' => $data['client_orderid'],
+				'merchant-order-id' => (string)$data['client_orderid'],
 				'serial-number'     => '00000000-0000-0000-0000-000000000000',
-				'paynet-order-id'   => $paynet_id = (int)substr_replace((string)time(), '0', -4, 1) ]);
+				'paynet-order-id'   => $paynet_id = substr((string)time(), 0, -4).'0000' ]);
 
 			if (($response['type'] ?? '') == 'async-response' && !empty($data['server_callback_url']))
 				register_shutdown_function(fn() => $this->fake_callback($data['server_callback_url'], [
 					'orderid'        => $paynet_id,
 					'status'         => $fake_status ?? 'approved',
-					'client_orderid' => $data['client_orderid'],
+					'client_orderid' => (string)$data['client_orderid'],
 					'type'           => [ 'preauth' => 'preauth', 'capture' => 'capture', 'make-rebill-preauth' => 'preauth' ][$action] ?? 'sale' ]));
 
 			return $response;
@@ -441,12 +440,12 @@ namespace Payneteasy {
 				CURLOPT_POST						=> 1,
 				CURLOPT_RETURNTRANSFER	=> 1,
 				CURLOPT_USERAGENT				=> self::USERAGENT,
-				CURLOPT_SSL_VERIFYHOST	=> self::is_debug_mode() ? 0 : 2,
-				CURLOPT_SSL_VERIFYPEER	=> self::is_debug_mode() ? 0 : 1,
+				CURLOPT_CONNECTTIMEOUT	=> 10,
+				CURLOPT_TIMEOUT					=> 30,
 				CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
 			if (self::is_debug_mode())
-				curl_setopt($Curl, CURLOPT_CONNECTTIMEOUT, 10);
+				curl_setopt_array($Curl, [ CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_SSL_VERIFYPEER => 0 ]);
 
 			$response = curl_exec($Curl);
 
@@ -458,9 +457,9 @@ namespace Payneteasy {
 			curl_close($Curl);
 
 			if (!empty($errmsg))
-				throw new PneException($errmsg, $data, [], [ 'REQUEST' => $url ]);
+				throw new PneTransportException($errmsg, $data, [], [ 'REQUEST' => $url ]);
 			elseif (empty($response))
-				throw new PneException('Card processing response is empty', $data);
+				throw new PneTransportException('Card processing response is empty', $data, [], [ 'REQUEST' => $url ]);
 
 			parse_str($response, $result);
 			array_walk($result, fn(&$v) => $v = rtrim($v));
@@ -487,6 +486,11 @@ namespace Payneteasy {
 				throw new PneException("Card processing returned unexpected response type: '$type', expected '$action_type'", $data, $result, [ 'URL' => $url ]);
 
 			return $result;
+		}
+
+		private static function call_logger($arg, string $level): void {
+			if (isset(self::$Logger) && !empty($arg))
+				self::$Logger->send_log_entry(is_array($arg) ? json_encode($arg, JSON_INVALID_UTF8_SUBSTITUTE) : $arg, $level);
 		}
 
 		private static function array_pick(array $arr, string $key) {

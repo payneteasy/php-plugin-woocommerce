@@ -15,13 +15,18 @@ namespace Payneteasy {
 		if (!count($arg))
 			return;
 
+		// Log only technical fields, no card or personal data
+		static $logged = [ 'REQUEST', 'RESULT', 'URL', 'amount', 'client_orderid', 'currency', 'end-point-id',
+			'error-code', 'error-message', 'error_code', 'error_message', 'merchant-order-id', 'orderid',
+			'paynet-order-id', 'processor-tx-id', 'serial-number', 'status', 'transaction-type', 'type' ];
+
+		$arg = array_intersect_key($arg, array_flip($logged));
+		if (!count($arg))
+			return;
+
 		ksort($arg);
 		foreach ($arg as $key => $value) {
-			if ($key == 'cvv2')
-				$arg[$key] = str_repeat('*', strlen($value));
-			elseif ($key == 'credit_card_number')
-				$arg[$key] = (strlen($value) > 4) ? str_repeat('*', strlen($value)-4).substr($value, -4) : $value;
-
+			$arg[$key] = is_scalar($value) ? preg_replace('/[\r\n]+/', ' ', (string)$value) : '';
 			error_log("$prefix'$key' => '{$arg[$key]}'");
 		}
 
@@ -73,11 +78,11 @@ namespace Payneteasy {
 		private $on_save, $on_input_key, $on_uninstall, $cfg = [
 			# [ value, regexp, shown name for exceptions, is_hidden  ]
 			'IS_LIVE'             => [ '0' ], # must be 1st for proper regex checks later
-			'SANDBOX_URL'         => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
+			'SANDBOX_URL'         => [ '', '|^https://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
 			'SANDBOX_END_POINT'   => [ '', '/^\d+$/', 'Sandbox Endpoint ID' ],
 			'SANDBOX_LOGIN'       => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
 			'SANDBOX_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Sandbox Control key' ],
-			'LIVE_URL'            => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
+			'LIVE_URL'            => [ '', '|^https://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
 			'LIVE_END_POINT'      => [ '', '/^\d+$/', 'Live Endpoint ID' ],
 			'LIVE_LOGIN'          => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
 			'LIVE_CONTROL_KEY'    => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
@@ -444,8 +449,11 @@ namespace Payneteasy {
 				CURLOPT_TIMEOUT					=> 30,
 				CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
+			// Debug mode (development only, never in production) talks to a local test gateway without TLS checks
 			if (self::is_debug_mode())
 				curl_setopt_array($Curl, [ CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_SSL_VERIFYPEER => 0 ]);
+			else
+				curl_setopt($Curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
 
 			$response = curl_exec($Curl);
 

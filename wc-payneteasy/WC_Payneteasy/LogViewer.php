@@ -217,7 +217,7 @@ class LogViewer { use \PneString;
 			? ' '.self::link([ null, 'client_orderid=', $oid ])
 			: '';
 
-		$html = "<div data-level='$level'><details><summary><time>$time</time>".esc_html(array_shift($json))."$link</summary>";
+		$html = "<div data-level='".esc_attr($level)."'><details><summary><time>".esc_html($time)."</time>".esc_html((string)array_shift($json))."$link</summary>";
 
 		foreach ($json as $hash)
 			$html .= '<table>'
@@ -230,7 +230,7 @@ class LogViewer { use \PneString;
 	private static function render_plain(string $level, string $time, string $text): string {
 		$no_link = preg_match('/\\bOrder #\\d+ not found\\b/', $text = esc_html($text));
 
-		return "<div data-level='$level'><time>$time</time>"
+		return "<div data-level='".esc_attr($level)."'><time>".esc_html($time)."</time>"
 			.preg_replace_callback('!^(..)(\\w+)/(.)(\\w+) !',
 					fn($m) => "<code class='{$m[1]}{$m[3]}'>{$m[1]}{$m[2]}/{$m[3]}{$m[4]}</code> ",
 				$no_link ? $text : preg_replace_callback('!\\b(client_orderid=)(\d+)\\b!', fn($m) => self::link($m), $text))
@@ -238,5 +238,5 @@ class LogViewer { use \PneString;
 	}
 
 	private static function link(array $m): string
-		{ return "<a href='".OrderUtil::get_order_admin_edit_url((int)$m[2])."'>{$m[1]}{$m[2]}</a>"; }
+		{ return "<a href='".esc_url(OrderUtil::get_order_admin_edit_url((int)$m[2]))."'>".esc_html((string)$m[1]).(int)$m[2]."</a>"; }
 }

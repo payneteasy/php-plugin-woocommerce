@@ -225,7 +225,9 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 		public function hook_webhook_handler(): void {
 			$in = array_map('wp_unslash', $_GET);
-			[ $order_id, $paynet_id, $type, $status ] = [ $in['client_orderid'], $in['orderid'], $in['type'], $in['status'] ];
+			[ $order_id, $paynet_id, $type, $status ] = [ $in['client_orderid'] ?? '', $in['orderid'] ?? '', $in['type'] ?? '', $in['status'] ?? '' ];
+			// Request values go to the log: keep only safe characters
+			[ $l_order_id, $l_paynet_id, $l_type, $l_status ] = array_map(fn($v) => substr(preg_replace('/[^\w.-]/', '', (string)$v), 0, 64), [ $order_id, $paynet_id, $type, $status ]);
 
 			try {
 				if (!$this->Api->verify_callback_signature($in))
@@ -240,7 +242,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 					$this->OrderStatus->set($O, $this->check_PaymentStatus($O, $paynet_id), false);
 				}
 
-				PneApi::log_info("$type/$status orderid=$paynet_id client_orderid=$order_id");
+				PneApi::log_info("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id");
 
 				exit('ok');
 			}
@@ -250,9 +252,9 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				elseif ($e instanceof PneException)
 					$this->order_exception_note($O, $e);
 
-				PneApi::log_error("$type/$status orderid=$paynet_id client_orderid=$order_id &rarr; ".$e->getMessage());
+				PneApi::log_error("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id &rarr; ".preg_replace('/[\r\n]+/', ' ', $e->getMessage()));
 
-				die($e->getMessage());
+				die(esc_html($e->getMessage()));
 			}
 		}
 

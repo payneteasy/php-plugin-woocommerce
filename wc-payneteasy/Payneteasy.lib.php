@@ -15,13 +15,18 @@ namespace Payneteasy {
 		if (!count($arg))
 			return;
 
+		// Log only technical fields, no card or personal data
+		static $logged = [ 'REQUEST', 'RESULT', 'URL', 'amount', 'client_orderid', 'currency', 'end-point-id',
+			'error-code', 'error-message', 'error_code', 'error_message', 'merchant-order-id', 'orderid',
+			'paynet-order-id', 'processor-tx-id', 'serial-number', 'status', 'transaction-type', 'type' ];
+
+		$arg = array_intersect_key($arg, array_flip($logged));
+		if (!count($arg))
+			return;
+
 		ksort($arg);
 		foreach ($arg as $key => $value) {
-			if ($key == 'cvv2')
-				$arg[$key] = str_repeat('*', strlen($value));
-			elseif ($key == 'credit_card_number')
-				$arg[$key] = (strlen($value) > 4) ? str_repeat('*', strlen($value)-4).substr($value, -4) : $value;
-
+			$arg[$key] = is_scalar($value) ? preg_replace('/[\r\n]+/', ' ', (string)$value) : '';
 			error_log("$prefix'$key' => '{$arg[$key]}'");
 		}
 

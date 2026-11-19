@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.6.3
+	* Version: 1.6.4
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -170,7 +170,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 				switch ($action) {
 					case 'check_status':
-						if (($before = $O->get_status()) != ($after = $this->OrderStatus->set($O, $this->check_PaymentStatus($O)))) {
+						if (($before = $O->get_status()) != ($after = $this->OrderStatus->set($O, $this->check_PaymentStatus($O), true, true))) {
 							$O->add_order_note(self::_T('Manual "Check status" changed order status from %s to %s.', $before, $after));
 							self::admin_notice('Order status updated.');
 						}
@@ -233,13 +233,26 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				if (!$this->Api->verify_callback_signature($in))
 					throw new \Exception(self::_T('Invalid callback signature.'));
 
-				if (!$this->OrderStatus->is($O = $this->order($order_id), "$type/$status")) {
-					if (!$this->paynet_id($O)) {
+				if (($O = $this->order($order_id))->get_payment_method() != $this->id)
+					throw new \Exception(self::_T('Payment method is not "Payneteasy Payment System".'));
+
+				if (!$this->OrderStatus->is($O, "$type/$status")) {
+					$Pr = $this->check_PaymentStatus($O, $paynet_id);
+					$current_id = $this->paynet_id($O);
+
+					// Another payment attempt of this order: it may only complete the payment.
+					if ($current_id !== '' && $current_id !== (string)$paynet_id
+							&& !(in_array($this->OrderStatus->action($Pr), [ 'paid', 'authorized' ], true) && $this->OrderStatus->is_awaiting($O))) {
+						PneApi::log_info("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id: not the current payment, order not changed");
+						exit('ok');
+					}
+
+					if ($current_id !== (string)$paynet_id) {
 						$O->set_transaction_id($paynet_id);
 						$O->save();
 					}
 
-					$this->OrderStatus->set($O, $this->check_PaymentStatus($O, $paynet_id), false);
+					$this->OrderStatus->set($O, $Pr, false);
 				}
 
 				PneApi::log_info("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id");
@@ -690,6 +703,24 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'capture/*'           => '!capture_rejected' ];
 		}
 
+		// Order statuses in which the order still waits for the result of a sale or preauth.
+		private const AWAITING = [ 'pending', 'on-hold', 'failed' ];
+
+		// Transactions on an existing payment; any other type is the payment itself (sale, preauth).
+		private const AFTER_PAYMENT = [ 'capture', 'cancel', 'void', 'reversal', 'chargeback' ];
+
+		public function is_awaiting(object $O): bool
+			{ return in_array($O->get_status(), self::AWAITING, true); }
+
+		public function action(Payneteasy_PaymentStatus $Pr): string
+			{ return $this->status_map("$Pr") ?: 'unpaid'; }
+
+		private function is_paid_in_full(object $O, Payneteasy_PaymentStatus $Pr): bool {
+			return is_numeric($amount = trim((string)$Pr->amount))
+				&& strtoupper(trim((string)$Pr->currency)) === strtoupper($O->get_currency())
+				&& (int)round((float)$amount * 100) === (int)round((float)$O->get_total() * 100);
+		}
+
 		private function status_map(string $payment_status): string {
 			if (is_null($entry = ($map = $this->_status_map)[$lookup = $payment_status] ?? $map[($t = strstr($lookup, '/', true)).'/*'] ?? null)
 					&& ($pick = array_key_first(array_filter($map,
@@ -705,8 +736,37 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				: $O->get_status() == 'failed';
 		}
 
-		public function set(object $O, Payneteasy_PaymentStatus $Pr, bool $make_notes=true): string {
-			$action = $this->status_map("$Pr") ?: 'unpaid';
+		public function set(object $O, Payneteasy_PaymentStatus $Pr, bool $make_notes=true, bool $force=false): string {
+			$action = $this->action($Pr);
+			$is_payment = !in_array((string)$Pr->transaction_type, self::AFTER_PAYMENT, true);
+
+			// The result of the payment itself changes only an order that waits for it
+			// (the merchant may have cancelled, refunded or completed the order since).
+			if ($is_payment && !$force && !$this->is_awaiting($O)) {
+				// E.g. WooCommerce cancelled the unpaid order on timeout, then the customer paid:
+				// tell the merchant once, do not reopen the order.
+				if ('cancelled' == $O->get_status() && in_array($action, [ 'paid', 'authorized' ], true)
+						&& $O->get_meta('_payneteasy_late_payment') !== ($paynet_id = (string)$Pr->paynet_order_id)) {
+					$O->add_order_note(self::_T('Gateway approved payment %s for the cancelled order. Check the order and refund the payment if needed.', $paynet_id));
+					$O->update_meta_data('_payneteasy_late_payment', $paynet_id);
+					$O->save();
+				}
+
+				return $O->get_status();
+			}
+
+			// Never move an order back from processing/completed to paid.
+			if ('paid' == $action && $O->is_paid())
+				return $O->get_status();
+
+			if ($is_payment && in_array($action, [ 'paid', 'authorized' ], true) && !$this->is_paid_in_full($O, $Pr)) {
+				$O->add_order_note(self::_T('Paid amount %s does not match the order total %s.', trim($Pr->amount.' '.$Pr->currency), $O->get_total().' '.$O->get_currency()));
+
+				if ($O->get_status() != 'on-hold')
+					$O->update_status('on-hold');
+
+				return 'on-hold';
+			}
 
 			switch ($action) {
 				case '!refund_rejected':

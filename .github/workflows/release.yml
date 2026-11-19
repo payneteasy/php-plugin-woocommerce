@@ -15,13 +15,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Check release
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The release may be published by hand together with the archive
+          # whose sha256 is in installation/update.json: do not replace it
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            echo "Release ${{ github.ref_name }} already exists, skipping"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build zip
+        if: steps.check.outputs.exists != 'true'
         run: |
           dir_name=$(ls -d */ | grep -v '^installation/$' | sed 's#/##')
           echo "dir_name=$dir_name" >> "$GITHUB_ENV"
           zip -r "${dir_name}.zip" "$dir_name"
 
       - name: Create release
+        if: steps.check.outputs.exists != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

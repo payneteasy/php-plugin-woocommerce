@@ -78,11 +78,11 @@ namespace Payneteasy {
 		private $on_save, $on_input_key, $on_uninstall, $cfg = [
 			# [ value, regexp, shown name for exceptions, is_hidden  ]
 			'IS_LIVE'             => [ '0' ], # must be 1st for proper regex checks later
-			'SANDBOX_URL'         => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
+			'SANDBOX_URL'         => [ '', '|^https://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Sandbox URL' ],
 			'SANDBOX_END_POINT'   => [ '', '/^\d+$/', 'Sandbox Endpoint ID' ],
 			'SANDBOX_LOGIN'       => [ '', '/^[a-z][\\w-]*\\w$/i', 'Sandbox Login' ],
 			'SANDBOX_CONTROL_KEY' => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Sandbox Control key' ],
-			'LIVE_URL'            => [ '', '|^https?://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
+			'LIVE_URL'            => [ '', '|^https://(?:\\w+(?:-\\w+)*\\.)+\\w+/\\w+$|', 'Live URL' ],
 			'LIVE_END_POINT'      => [ '', '/^\d+$/', 'Live Endpoint ID' ],
 			'LIVE_LOGIN'          => [ '', '/^[a-z][\\w-]*\\w$/i', 'Live Login' ],
 			'LIVE_CONTROL_KEY'    => [ '', '/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i', 'Live Control key' ],
@@ -449,8 +449,11 @@ namespace Payneteasy {
 				CURLOPT_TIMEOUT					=> 30,
 				CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
+			// Debug mode (development only, never in production) talks to a local test gateway without TLS checks
 			if (self::is_debug_mode())
 				curl_setopt_array($Curl, [ CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_SSL_VERIFYPEER => 0 ]);
+			else
+				curl_setopt($Curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
 
 			$response = curl_exec($Curl);
 

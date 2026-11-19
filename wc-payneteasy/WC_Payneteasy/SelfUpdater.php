@@ -15,6 +15,7 @@ use Payneteasy\PneApi;
 
 add_filter('plugins_api', ['WC_Payneteasy\SelfUpdater', 'hook_plugin_update_info'], 20, 3);
 add_filter('pre_set_site_transient_update_plugins', ['WC_Payneteasy\SelfUpdater', 'hook_plugin_check_version']);
+add_filter('upgrader_pre_download', ['WC_Payneteasy\SelfUpdater', 'hook_verify_package'], 10, 3);
 if ($host = PneApi::debug_host())
 	add_filter('http_request_args', function($parsed_args, $url) use ($host) {
 		if (parse_url($url, PHP_URL_HOST) === $host)
@@ -62,6 +63,35 @@ class SelfUpdater {
 			$C->no_update[$entry] = (object)[ 'slug' => $Remote->slug, 'plugin' => $entry, 'new_version' => $Remote->version ];
 
 		return $C;
+	}
+
+	/**
+	 * Downloads the update package and checks it against the sha256 from update.json.
+	 */
+	public static function hook_verify_package($reply, $package, $upgrader) {
+		if (false !== $reply || !is_string($package) || PneApi::debug_host())
+			return $reply;
+
+		$json = self::fetch_update_json();
+		if (empty($json['version']) || $package !== self::update_url($json['version']))
+			return $reply;
+
+		if (empty($json['sha256']) || !preg_match('/^[0-9a-f]{64}$/i', $json['sha256']))
+			return new \WP_Error('pne_update_checksum', 'Payneteasy update has no checksum, update it manually.');
+
+		if (!function_exists('download_url'))
+			require_once ABSPATH.'wp-admin/includes/file.php';
+
+		$file = download_url($package);
+		if (is_wp_error($file))
+			return $file;
+
+		if (!hash_equals(strtolower($json['sha256']), hash_file('sha256', $file))) {
+			@unlink($file);
+			return new \WP_Error('pne_update_checksum', 'Payneteasy update package checksum does not match.');
+		}
+
+		return $file;
 	}
 
 	private static function update_url(?string $plg_ver=null): string {

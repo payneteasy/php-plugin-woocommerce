@@ -72,9 +72,15 @@ class SelfUpdater {
 		if (false !== $reply || !is_string($package) || PneApi::debug_host())
 			return $reply;
 
+		// Every package of this plugin is checked, not only the one the cached update.json names
+		if (!self::is_own_package($package))
+			return $reply;
+
+		// The checksum comes from update.json as it is now, not from the cache
+		delete_transient(self::GITHUB_REPO);
 		$json = self::fetch_update_json();
 		if (empty($json['version']) || $package !== self::update_url($json['version']))
-			return $reply;
+			return new \WP_Error('pne_update_checksum', 'Payneteasy update package is not the latest release, update it manually.');
 
 		if (empty($json['sha256']) || !preg_match('/^[0-9a-f]{64}$/i', $json['sha256']))
 			return new \WP_Error('pne_update_checksum', 'Payneteasy update has no checksum, update it manually.');
@@ -92,6 +98,16 @@ class SelfUpdater {
 		}
 
 		return $file;
+	}
+
+	/**
+	 * True for the release packages of this plugin (any version).
+	 */
+	private static function is_own_package(string $package): bool {
+		$prefix = sprintf('https://github.com/%s/releases/download/', self::GITHUB_REPO);
+		return 0 === strpos($package, $prefix)
+			|| 0 === strpos($package, sprintf('https://api.github.com/repos/%s/', self::GITHUB_REPO))
+			|| 0 === strpos($package, sprintf('https://codeload.github.com/%s/', self::GITHUB_REPO));
 	}
 
 	private static function update_url(?string $plg_ver=null): string {

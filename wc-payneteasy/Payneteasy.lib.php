@@ -253,6 +253,21 @@ namespace Payneteasy {
 		public static function debug_host(): ?string
 			{ return $_SERVER['DEBUG_HOST'] ?? null; }
 
+		/**
+		 * HTTPS only, with the certificate and host name checked, in every mode.
+		 * A test gateway with its own certificate is trusted in debug mode through
+		 * the DEBUG_CAINFO server variable (path to its CA file), not by turning the checks off.
+		 */
+		private static function secure_curl($Curl): void {
+			curl_setopt_array($Curl, [
+				CURLOPT_PROTOCOLS      => CURLPROTO_HTTPS,
+				CURLOPT_SSL_VERIFYPEER => true,
+				CURLOPT_SSL_VERIFYHOST => 2 ]);
+
+			if (self::is_debug_mode() && ($ca = (string)($_SERVER['DEBUG_CAINFO'] ?? '')) !== '' && is_file($ca))
+				curl_setopt($Curl, CURLOPT_CAINFO, $ca);
+		}
+
 		public static function log_error($arg): void
 			{ self::call_logger($arg, PneLogger::AS_ERROR); }
 
@@ -268,8 +283,9 @@ namespace Payneteasy {
 			if ($stored_ver && $stored_ver != $curr_ver)
 				return true;
 
-			$Curl = curl_init(sprintf(($host = self::debug_host()) ? "http://$host/%s" : 'https://api.github.com/repos/%s/releases/latest', $repo));
-			curl_setopt_array($Curl, [ CURLOPT_USERAGENT => self::USERAGENT, CURLOPT_RETURNTRANSFER => 1, CURLOPT_CONNECTTIMEOUT => 10 ]);
+			$Curl = curl_init(sprintf(($host = self::debug_host()) ? "https://$host/%s" : 'https://api.github.com/repos/%s/releases/latest', $repo));
+			curl_setopt_array($Curl, [ CURLOPT_USERAGENT => self::USERAGENT, CURLOPT_RETURNTRANSFER => 1, CURLOPT_CONNECTTIMEOUT => 10, CURLOPT_TIMEOUT => 30 ]);
+			self::secure_curl($Curl);
 
 			$response = curl_exec($Curl);
 
@@ -449,11 +465,7 @@ namespace Payneteasy {
 				CURLOPT_TIMEOUT					=> 30,
 				CURLOPT_POSTFIELDS			=> http_build_query($data) ]);
 
-			// Debug mode (development only, never in production) talks to a local test gateway without TLS checks
-			if (self::is_debug_mode())
-				curl_setopt_array($Curl, [ CURLOPT_SSL_VERIFYHOST => 0, CURLOPT_SSL_VERIFYPEER => 0 ]);
-			else
-				curl_setopt($Curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+			self::secure_curl($Curl);
 
 			$response = curl_exec($Curl);
 

@@ -113,8 +113,8 @@ class SelfUpdater {
 	private static function update_url(?string $plg_ver=null): string {
 		if ($host = PneApi::debug_host())
 			return $plg_ver
-				? "http://$host/".PNE_PLUGIN_SLUG.'.zip' # "-v$plg_ver.zip"
-				: "http://$host/update.json";
+				? "https://$host/".PNE_PLUGIN_SLUG.'.zip' # "-v$plg_ver.zip"
+				: "https://$host/update.json";
 
 		return sprintf($plg_ver
 				? 'https://github.com/%s/releases/download/v%s/%s.zip' # -v%2$s.zip'

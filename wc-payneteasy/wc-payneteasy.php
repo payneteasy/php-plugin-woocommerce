@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.6.5
+	* Version: 1.6.6
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy

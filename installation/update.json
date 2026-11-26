@@ -7,7 +7,7 @@
 	"tested": "7.1.2",
 	"requires_php": "7.4",
 	"last_updated": "2026-11-26",
-	"sha256": "b3aa417b0fd33dabc17c620500891bb03c022a6b64f0a00b3394e0ac9c27c8d8",
+	"sha256": "729a9c21bc62f7fa01cc9d64a095e41a7e36971c9cd52378ad03e8bf4fdfc0c0",
 	"sections" : {
 		"description" : "Allows you to use online card payment system by Payneteasy with the WooCommerce."
 	}

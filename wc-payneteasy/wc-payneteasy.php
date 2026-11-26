@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.6.6
+	* Version: 1.6.7
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -181,7 +181,7 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 					case 'capture':
 						if ($this->process_capture($O, isset($_POST['amount']) ? (float)$_POST['amount'] : null))
-							self::admin_notice('Capture completed.');
+							self::admin_notice('paid' == $O->get_status() ? 'Capture completed.' : 'Capture sent, see the order notes for its result.');
 						else
 							throw new \Exception('Capture failed.');
 
@@ -379,8 +379,32 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 				$this->Api->capture($data);
 
-				$O->update_status('paid', self::_T('Payment captured successfully.'));
-				$O->payment_complete();
+				// The gateway has only accepted the request: the order is paid once
+				// the capture itself is approved. Wait briefly for its result.
+				$Pr = $this->check_PaymentStatus($O);
+
+				for ($i = 0; $i < 4 && $Pr->is_processing(); $i++) {
+					sleep(1);
+					$Pr = $this->check_PaymentStatus($O);
+				}
+
+				if ('capture/approved' == "$Pr") {
+					$O->update_status('paid', isset($amount)
+						? self::_T('Payment captured successfully: %s.', $amount.' '.$O->get_currency())
+						: self::_T('Payment captured successfully.'));
+					$O->payment_complete();
+
+					return true;
+				}
+
+				if ('capture' == $Pr->transaction_type && !$Pr->is_processing()) {
+					$O->add_order_note(self::_T('Gateway declined the capture: %s', "$Pr"));
+
+					return false;
+				}
+
+				// No result yet: the gateway notification completes the order
+				$O->add_order_note(self::_T('Capture sent to the gateway, its result is not known yet.'));
 
 				return true;
 			}

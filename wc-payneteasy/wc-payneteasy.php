@@ -3,7 +3,7 @@
 	* Plugin Name: Payneteasy payment system
 	* Plugin URI: https://github.com/payneteasy/php-plugin-woocommerce
 	* Description: Allows you to use payment system Payneteasy with the WooCommerce.
-	* Version: 1.6.7
+	* Version: 1.6.8
 	* Author: Payneteasy
 	* Author URI: https://payneteasy.com/
 	* Text Domain: wc-payneteasy
@@ -63,11 +63,14 @@ function hook_init_wc_paynet_payment_gateway(): void {
 		require_once 'WC_Payneteasy/LogViewer.php';
 	}
 
+	class WC_Payneteasy_LockException extends \Exception {}
+
 	class WC_Payneteasy extends WC_Payment_Gateway { use PneString;
 		private $Api, $Cfg, $OrderStatus;
 		private string $notify_url;
 
 		private const DO_RECHECK_STATUS = 'do_recheck_status';
+		private const LOCK_TIMEOUT = 40; # seconds, longer than one gateway request
 
 		function __construct() {
 			$this->id = PNE_PLUGIN_ID;
@@ -201,7 +204,13 @@ function hook_init_wc_paynet_payment_gateway(): void {
 
 		public function hook_return_handler(): void {
 			try {
-				if (!hash_equals(($O = $this->order($_GET['orderId']))->get_order_key(), (string)($_GET['key'] ?? '')))
+				// Non-scalar request values (orderId[]=1) are ignored
+				[ $order_id, $key ] = array_map(fn($k) => is_scalar($v = $_GET[$k] ?? '') ? (string)$v : '', [ 'orderId', 'key' ]);
+
+				// Lock first, then read the order: the webhook may be changing it right now
+				$this->lock_order($order_id);
+
+				if (!hash_equals(($O = $this->order($order_id))->get_order_key(), $key))
 					throw new \Exception(self::_T('Invalid order key.'));
 
 				$this->OrderStatus->set($O, $Pr = $this->check_PaymentStatus($O));
@@ -216,15 +225,17 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				exit;
 			}
 			catch (\Exception $e) {
-				if ($e instanceof PneException)
+				if ($e instanceof PneException && isset($O))
 					$this->order_exception_note($O, $e);
 
-				wp_die( $e->getMessage() );
+				// A bad request (wrong key, unknown order) is not a server error
+				wp_die($e->getMessage(), '', [ 'response' => $e instanceof PneException ? 500 : ($e instanceof WC_Payneteasy_LockException ? 503 : 400) ]);
 			}
 		}
 
 		public function hook_webhook_handler(): void {
-			$in = array_map('wp_unslash', $_GET);
+			// Non-scalar request values (x[]=1) are ignored
+			$in = array_map('wp_unslash', array_filter($_GET, 'is_scalar'));
 			[ $order_id, $paynet_id, $type, $status ] = [ $in['client_orderid'] ?? '', $in['orderid'] ?? '', $in['type'] ?? '', $in['status'] ?? '' ];
 			// Request values go to the log: keep only safe characters
 			[ $l_order_id, $l_paynet_id, $l_type, $l_status ] = array_map(fn($v) => substr(preg_replace('/[^\w.-]/', '', (string)$v), 0, 64), [ $order_id, $paynet_id, $type, $status ]);
@@ -232,6 +243,9 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			try {
 				if (!$this->Api->verify_callback_signature($in))
 					throw new \Exception(self::_T('Invalid callback signature.'));
+
+				// Lock first, then read the order: the customer return may be changing it right now
+				$this->lock_order($order_id);
 
 				if (($O = $this->order($order_id))->get_payment_method() != $this->id)
 					throw new \Exception(self::_T('Payment method is not "Payneteasy Payment System".'));
@@ -243,6 +257,14 @@ function hook_init_wc_paynet_payment_gateway(): void {
 					// Another payment attempt of this order: it may only complete the payment.
 					if ($current_id !== '' && $current_id !== (string)$paynet_id
 							&& !(in_array($this->OrderStatus->action($Pr), [ 'paid', 'authorized' ], true) && $this->OrderStatus->is_awaiting($O))) {
+						// One more approved payment of an order that is already paid: tell the merchant once per transaction
+						if (in_array($this->OrderStatus->action($Pr), [ 'paid', 'authorized' ], true)
+								&& !in_array($l_paynet_id, $noted = (array)($O->get_meta('_payneteasy_extra_payments') ?: []), true)) {
+							$O->add_order_note(self::_T('Gateway approved one more payment %s of this order (current payment: %s). Check the order and refund the payment if needed.', $l_paynet_id, $current_id));
+							$O->update_meta_data('_payneteasy_extra_payments', array_merge($noted, [ $l_paynet_id ]));
+							$O->save();
+						}
+
 						PneApi::log_info("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id: not the current payment, order not changed");
 						exit('ok');
 					}
@@ -262,7 +284,9 @@ function hook_init_wc_paynet_payment_gateway(): void {
 			catch (\Exception $e) {
 				if ($e instanceof PneTransportException)
 					status_header(500);
-				elseif ($e instanceof PneException)
+				elseif ($e instanceof WC_Payneteasy_LockException)
+					status_header(503); # the gateway repeats the notification
+				elseif ($e instanceof PneException && isset($O))
 					$this->order_exception_note($O, $e);
 
 				PneApi::log_error("$l_type/$l_status orderid=$l_paynet_id client_orderid=$l_order_id &rarr; ".preg_replace('/[\r\n]+/', ' ', $e->getMessage()));
@@ -427,6 +451,22 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				return $O;
 			else
 				throw new \Exception(self::_T('Order #%d not found.', $order_id));
+		}
+
+		// Per-order lock for the customer return and the webhook, held until the end of the request.
+		private function lock_order($order_id): void {
+			global $wpdb;
+
+			if (!preg_match('/^\d+$/', $order_id = (string)$order_id))
+				return; # order() reports the invalid id
+
+			$name = 'pne_'.md5(DB_NAME.$wpdb->prefix.$order_id); # lock names are server-wide
+
+			if ('1' !== (string)$wpdb->get_var($wpdb->prepare('SELECT GET_LOCK(%s, %d)', $name, self::LOCK_TIMEOUT)))
+				throw new WC_Payneteasy_LockException(self::_T('Order #%d is being processed, try again later.', $order_id));
+
+			// The handlers end with exit/wp_die: release the lock on shutdown
+			register_shutdown_function(fn() => $wpdb->query($wpdb->prepare('SELECT RELEASE_LOCK(%s)', $name)));
 		}
 
 		private function init_config(): PneConfig {
@@ -836,7 +876,8 @@ function hook_init_wc_paynet_payment_gateway(): void {
 				'unpaid'     => [ 'Payment not paid.', 'failed' ],
 				'authorized' => [ 'Payment authorized, awaiting capture.', null, true ],
 				'paid'       => [ 'Payment completed successfully.', null, true ],
-				'partially_refunded' => [ 'Partial refund of payment.', 'paid', null, true ] ];
+				// A partial refund never changes the order status (a processing/completed order must not go back to paid): note only
+				'partially_refunded' => [ 'Partial refund of payment.', $O->get_status(), null, true ] ];
 
 			[ $text, $status, $extra_actions, $at_least ] = array_pad(is_array($map[$action]) ? $map[$action] : [$map[$action]], 4, null);
 

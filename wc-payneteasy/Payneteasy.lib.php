@@ -315,8 +315,12 @@ namespace Payneteasy {
 		public function is_form(): bool
 			{ return (bool)$this->is_form; }
 
-		public function verify_callback_signature(array $params): bool
-			{ return hash_equals(sha1(($params['status'] ?? '').($params['orderid'] ?? '').($params['client_orderid'] ?? '').$this->control_key), $params['control'] ?? ''); }
+		public function verify_callback_signature(array $params): bool {
+			// Non-scalar values (control[]=x) are ignored: such a request is never valid
+			[ $status, $orderid, $client_orderid, $control ] = array_map(fn($k) => is_scalar($v = $params[$k] ?? '') ? (string)$v : '', [ 'status', 'orderid', 'client_orderid', 'control' ]);
+
+			return hash_equals(sha1($status.$orderid.$client_orderid.$this->control_key), $control);
+		}
 
 		public function sale(array $data): array {
 			$action = ($this->is_preauth ? 'preauth' : 'sale').($this->is_form ? '-form' : '');
